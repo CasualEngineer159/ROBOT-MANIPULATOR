@@ -80,6 +80,16 @@ void exec_move(const char* cmd_prefix, float a, float r, float z, int f = 0) {
 
 // --- OPTIMALIZACE: UNIVERZÁLNÍ FUNKCE PRO ODLOŽENÍ ---
 bool unload_current_tool() {
+
+    // Zjistíme, zda jsou souřadnice v relativním módu (stačí test na X osu)
+    bool was_relative = GcodeSuite::axis_is_relative(X_AXIS);
+    
+    // Pokud ano, přepneme vše na absolutní mód (G90)
+    if (was_relative) {
+        GcodeSuite::set_relative_mode(false);
+    }
+
+
     if (tool_in_hand == -1) return true; // Ruka už je prázdná
 
     int8_t free_dock = -1;
@@ -109,6 +119,11 @@ bool unload_current_tool() {
 
     SERIAL_ECHOPGM(">> Odkladam T"); SERIAL_ECHO(tool_in_hand); SERIAL_ECHOPGM(" do D"); SERIAL_ECHOLN(free_dock);
     
+    float current_A = atan2(current_position.y, current_position.x) * (180.0 / M_PI);
+    float current_R = hypot(current_position.x, current_position.y); // Odpovídá sqrt(X^2 + Y^2)
+    
+    exec_move("G8", current_A, current_R, ref_Z + 100);
+    exec_move("G8", current_A, ref_R + 100, ref_Z + 100);
     exec_move("G8", t_A, ref_R + 100, ref_Z + 100);       
     exec_move("G8", t_A, ref_R + 60,  ref_Z + 6, 2000);   
     exec_move("G9", t_A, ref_R,       ref_Z, 1000);       
@@ -119,6 +134,10 @@ bool unload_current_tool() {
 
     dock_tool[free_dock] = tool_in_hand; 
     tool_in_hand = -1;
+
+    // Obnova po úspěšném dokončení - vrátíme zpět na relativní, pokud byl
+    if (was_relative) GcodeSuite::set_relative_mode(true);
+
     return true;
 }
 
@@ -128,10 +147,11 @@ bool unload_current_tool() {
 void GcodeSuite::M666() {
     int id = -1;
 
-    if (parser.seen('P')) {
+    // OPRAVA 1: 'seenval' ignoruje písmena uvnitř textu a reaguje jen na P následované číslem
+    if (parser.seenval('P')) {
         id = parser.value_int();
     } 
-    else if (parser.seen('S') || parser.seen('X') || parser.seen('Y') || parser.seen('Z')) {
+    else if (parser.seen('S') || parser.seenval('X') || parser.seenval('Y') || parser.seenval('Z') || parser.seenval('C')) {
         uint8_t head_id = read_pogo_pins();
         if (head_id != HEAD_EMPTY && head_id != HEAD_ERROR) {
             id = head_id; 
@@ -141,17 +161,49 @@ void GcodeSuite::M666() {
         }
     }
 
-    if (id >= 0 && id < 16 && (parser.seen('S') || parser.seen('X') || parser.seen('Y') || parser.seen('Z'))) {
-        if (parser.seen('X')) tool_table[id].lx = parser.value_float();
-        if (parser.seen('Y')) tool_table[id].ly = parser.value_float();
-        if (parser.seen('Z')) tool_table[id].lz = parser.value_float();
-        if (parser.seen('C')) tool_table[id].clamp_angle = parser.value_int(); // <--- Zápis úhlu
-        if (parser.seen('S')) strcpy(tool_table[id].name, parser.string_arg);
+    if (id >= 0 && id < 16 && (parser.seen('S') || parser.seenval('X') || parser.seenval('Y') || parser.seenval('Z') || parser.seenval('C'))) {
+        
+        // Všude použito seenval() pro bezpečné vytažení číselných hodnot
+        if (parser.seenval('X')) tool_table[id].lx = parser.value_float();
+        if (parser.seenval('Y')) tool_table[id].ly = parser.value_float();
+        if (parser.seenval('Z')) tool_table[id].lz = parser.value_float();
+        if (parser.seenval('C')) tool_table[id].clamp_angle = parser.value_int(); 
+        
+        // OPRAVA 2: Čisté vyčtení jména pomocí veřejné proměnné parser.string_arg
+        if (parser.seen('S')) {
+            char* str = parser.string_arg; 
+            if (str) {
+                int j = 0;
+                bool in_quotes = false;
+                
+                // 1. Přeskočíme všechny počáteční mezery a případné samotné písmeno 'S'
+                int i = 0;
+                while (str[i] == ' ' || str[i] == 'S') {
+                    i++;
+                }
+                
+                // 2. Samotné čtení slova
+                for (; str[i] != '\0' && j < 14; i++) {
+                    if (str[i] == '"') {
+                        in_quotes = !in_quotes; // Přepínáme stav uvnitř/vně uvozovek
+                        continue; // Samotné uvozovky nekopírujeme
+                    }
+                    
+                    // Konec slova (narazili jsme na mezeru za slovem a nejsme v uvozovkách)
+                    if (str[i] == ' ' && !in_quotes) break; 
+                    
+                    tool_table[id].name[j++] = str[i];
+                }
+                tool_table[id].name[j] = '\0'; // Uzavření řetězce
+            }
+        }
         
         SERIAL_ECHOPGM("Nastroj T"); SERIAL_ECHO(id); 
         SERIAL_ECHOLNPGM(" ulozen v RAM. Pro EEPROM zadejte M500.");
     } 
-    else if (!parser.seen('S') && !parser.seen('X') && !parser.seen('Y') && !parser.seen('Z')) {
+    else if (!parser.seen('S') && !parser.seenval('X') && !parser.seenval('Y') && !parser.seenval('Z') && !parser.seenval('C')) {
+        
+        // Čistý výpis knihovny (bez uvozovek a 'S' v paměti)
         SERIAL_ECHOLNPGM("Knihovna nastroju:");
         for (uint8_t i = 0; i < 16; i++) {
             if (tool_table[i].name[0] != '\0') {
@@ -159,7 +211,7 @@ void GcodeSuite::M666() {
                 SERIAL_ECHOPGM(") -> X:"); SERIAL_ECHO(tool_table[i].lx); 
                 SERIAL_ECHOPGM(" Y:"); SERIAL_ECHO(tool_table[i].ly); 
                 SERIAL_ECHOPGM(" Z:"); SERIAL_ECHOLN(tool_table[i].lz);
-                SERIAL_ECHOPGM(" Uhel:"); SERIAL_ECHOLN(tool_table[i].clamp_angle); // <--- Tisk úhlu
+                SERIAL_ECHOPGM(" Uhel:"); SERIAL_ECHOLN(tool_table[i].clamp_angle); 
             }
         }
     }
@@ -207,6 +259,10 @@ void GcodeSuite::M667() {
 
         SERIAL_ECHOLNPGM(">>> Zahajuji AUTO-SCAN zasobniku...");
 
+        // Ochrana proti relativnímu pohybu
+        bool was_relative = GcodeSuite::axis_is_relative(X_AXIS);
+        if (was_relative) GcodeSuite::set_relative_mode(false);
+
         // 1. Vymazání staré paměti (chceme absolutně čistou inventuru)
         for (int i = 0; i < 3; i++) dock_tool[i] = -1;
         
@@ -224,6 +280,10 @@ void GcodeSuite::M667() {
         } else {
             tool_in_hand = -1;
         }
+
+        float current_A = DEGREES(atan2(current_position.y, current_position.x));
+        float current_R = hypot(current_position.x, current_position.y);
+        exec_move("G8", current_A, current_R, ref_Z + 100);
 
         // 3. Výpočet tras a seřazení (Optimalizace)
         float cur_A = DEGREES(atan2(current_position.y, current_position.x));
@@ -257,7 +317,7 @@ void GcodeSuite::M667() {
                     
                     float t_A = ref_A + magazine[i].a_offset;
                     
-                    exec_move("G8", t_A, ref_R, ref_Z + 60); 
+                    exec_move("G9", t_A, ref_R, ref_Z + 100); 
                     gcode.process_subcommands_now((char *)"M280 P0 S180"); 
                     
                     exec_move("G9", t_A, ref_R, ref_Z, 1000); 
@@ -279,7 +339,7 @@ void GcodeSuite::M667() {
                         SERIAL_ECHOLNPGM("!!! Chyba cteni! POGO piny neprecetly platne ID.");
                     }
                     
-                    exec_move("G9", t_A, ref_R, ref_Z + 100, 1500); 
+                    exec_move("G9", t_A, ref_R, ref_Z + 60, 1500); 
                 } else {
                     // Robot už ví, co tu je, protože to sem před chvílí položil
                     SERIAL_ECHOPGM("Dock "); SERIAL_ECHO(i); SERIAL_ECHOPGM(" preskocen (Nastroj T"); 
@@ -292,6 +352,9 @@ void GcodeSuite::M667() {
         }
         SERIAL_ECHOLNPGM(">>> AUTO-SCAN DOKONCEN!");
         return; 
+
+        if (was_relative) GcodeSuite::set_relative_mode(true);
+        return;
     }
 
     // --- U) UNLOAD: POUZE ODLOŽENÍ NÁSTROJE ---
@@ -367,6 +430,10 @@ void GcodeSuite::M6() {
         return;
     }
 
+    // Ochrana proti relativnímu pohybu
+    bool was_relative = GcodeSuite::axis_is_relative(X_AXIS);
+    if (was_relative) GcodeSuite::set_relative_mode(false);
+
     int8_t target_tool = parser.value_int();
     if (tool_in_hand == target_tool) return;
 
@@ -423,4 +490,7 @@ void GcodeSuite::M6() {
     tool_in_hand = target_tool;
     dock_tool[source_dock] = -1; 
     SERIAL_ECHOLNPGM(">> ATC Hotovo.");
+
+    if (was_relative) GcodeSuite::set_relative_mode(true);
+    return;
 }

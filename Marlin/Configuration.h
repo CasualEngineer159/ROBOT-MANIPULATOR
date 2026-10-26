@@ -1196,7 +1196,7 @@
  * Override with M201
  *                                      X, Y, Z [, I [, J [, K...]]], E0 [, E1[, E2...]]
  */
-#define DEFAULT_MAX_ACCELERATION      { 1000, 1000, 1000, 20000 }
+#define DEFAULT_MAX_ACCELERATION      { 500, 500, 500, 20000 }
 
 #define LIMITED_MAX_ACCEL_EDITING     // Limit edit via M201 or LCD to DEFAULT_MAX_ACCELERATION * 2
 #if ENABLED(LIMITED_MAX_ACCEL_EDITING)
@@ -1225,8 +1225,8 @@
  */
 #define CLASSIC_JERK
 #if ENABLED(CLASSIC_JERK)
-  #define DEFAULT_XJERK  5.0
-  #define DEFAULT_YJERK  5.0
+  #define DEFAULT_XJERK  1.0
+  #define DEFAULT_YJERK  1.0
   #define DEFAULT_ZJERK  0.3
   //#define DEFAULT_IJERK  0.3
   //#define DEFAULT_JJERK  0.3
@@ -3370,5 +3370,3 @@
 
 // Disable servo with M282 to reduce power consumption, noise, and heat when not in use
 #define SERVO_DETACH_GCODE
-
-#define DIAG_JUMPERS_REMOVED

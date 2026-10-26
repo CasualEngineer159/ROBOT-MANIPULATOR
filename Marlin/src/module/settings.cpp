@@ -742,7 +742,7 @@ void MarlinSettings::postprocess() {
   uint16_t MarlinSettings::working_crc;
 
   bool MarlinSettings::size_error(const uint16_t size) {
-  // ÚPRAVA Matěj: Vypnutí nesmyslné kontroly velikosti, naše data hlídá CRC
+  // ÚPRAVA Matěj: Vypnutí kontroly velikosti tabulky
   return false;
 }
 
