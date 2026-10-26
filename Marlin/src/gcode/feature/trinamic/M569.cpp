@@ -50,7 +50,7 @@ static void set_stealth_status(const bool enable, const int8_t eindex) {
   #if X2_HAS_STEALTHCHOP || Y2_HAS_STEALTHCHOP || Z2_HAS_STEALTHCHOP || Z3_HAS_STEALTHCHOP || Z4_HAS_STEALTHCHOP
     const int8_t index = parser.byteval('I', -1);
   #else
-    constexpr int8_t index = -1;
+    // constexpr int8_t index = -1; Zakomentováno kvůli potlačení varování při kompilaci
   #endif
 
   LOOP_LOGICAL_AXES(i) if (parser.seen(AXIS_CHAR(i))) {
