@@ -3169,7 +3169,7 @@ void Stepper::set_axis_position(const AxisEnum a, const int32_t &v) {
 
 void Stepper::endstop_triggered(const AxisEnum axis) {
 
-  SERIAL_ECHOLNPGM("Endstop hit!!! [funkce endstop_triggered()]");
+  SERIAL_ECHOLNPGM("Endstop triggered on axis ", axis_codes[axis]);
 
   const bool was_enabled = suspend();
   endstops_trigsteps[axis] = (

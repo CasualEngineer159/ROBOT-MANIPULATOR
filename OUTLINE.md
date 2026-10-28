@@ -189,7 +189,6 @@ The core of the ROBOT-MANIPULATOR firmware resides within the `Marlin/` director
 
 - **`Marlin/src/module/endstops.cpp`**
     - **New Member Variables**: `old_live_state`, `endstop_changed`, `endstop_poll_count` added to `Endstops` class for advanced endstop state tracking.
-    - **`validate_homing_move()` Modification**: Now takes `AxisEnum axis` and, on missed endstop, prints a serial message and sets `B_HOMING_MISSED = true` instead of killing the printer.
     - **`update()` Function Overhaul**:
         - **Endstop State Detection**: The `PROCESS_ENDSTOP` macro is redefined to trigger on `ENDSTOP_CHANGED` (state change) rather than `TEST_ENDSTOP` (current state), crucial for inductive sensors.
         - **Cycle-based Debouncing**: Integrates `endstop_poll_count` and `old_live_state` within `change_state()` to implement a cycle-based debouncing mechanism, allowing the arm to drive deeper into the sensor field to prevent false triggers.

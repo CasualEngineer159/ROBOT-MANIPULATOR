@@ -1532,13 +1532,22 @@ void prepare_line_to_destination() {
   /**
    * Home an individual linear axis
    */
-  void do_homing_move(const AxisEnum axis, const float distance, const feedRate_t fr_mm_s=0.0, const bool final_approach=true, bool BC_homing = false) {
+
+  // Lookup function for correct direction the axis should move
+  int8_t get_expected_dir(const AxisEnum axis, const bool sensor_active) {
+    switch (axis) {
+      case A_AXIS: return sensor_active ? -1 : 1;
+      case B_AXIS: return sensor_active ? -1 : 1;
+      case C_AXIS: return sensor_active ?  1 : -1;
+      default: return 0;
+    }
+  }
+
+  void do_homing_move(const AxisEnum axis, const float distance, const feedRate_t fr_mm_s=0.0, const bool final_approach=true, bool BC_homing=false, uint8_t retry_depth=0, bool check_direction = true) {
 
     const feedRate_t home_fr_mm_s = fr_mm_s ?: homing_feedrate(X_AXIS);
 
-    if (BC_homing){
-      delta.c = 0;
-    }
+    if (BC_homing) delta.c = 0;
 
     switch (axis) {
       case A_AXIS: delta.a = 0; break;
@@ -1548,11 +1557,9 @@ void prepare_line_to_destination() {
     }
 
     planner.set_machine_position_mm(delta);
-    //report_current_position();
 
-    if (BC_homing){
-      delta.c = distance;
-    }
+    if (BC_homing) delta.c = distance;
+
     switch (axis) {
       case A_AXIS: delta.a = distance; break;
       case B_AXIS: delta.b = distance; break;
@@ -1560,13 +1567,50 @@ void prepare_line_to_destination() {
       default: return;
     }
 
-    //report_current_position();
+    // Clear any stale endstop hits and resync old_live_state right before queuing the move
+    if (check_direction) {
+      endstops.hit_on_purpose();
+      endstops.resync();
+    }
+
     line_to_current_position(home_fr_mm_s, true);
 
-    planner.synchronize();
+    millis_t next_check_ms = millis() + 50; // Wait 50ms to clear the transition edge first
+    const int8_t actual_dir = (distance > 0) ? 1 : -1;
+    bool wrong_direction = false;
+
+    while (planner.busy()) {
+      idle();
+      // Only check direction when endstops are enabled (ignores the -bump backoff move!)
+      if (check_direction && ELAPSED(millis(), next_check_ms)) {
+        next_check_ms = millis() + 50;
+
+        const bool current_sensor = endstop_pressed(axis);
+        const int8_t expected_dir = get_expected_dir(axis, current_sensor);
+
+        if (actual_dir != expected_dir) {
+          planner.quick_stop(); // Trigger immediate deceleration
+          wrong_direction = true;
+          break;
+        }
+      }
+    }
+
+    planner.synchronize(); // MUST finish stopping before resetting position or recursing!
+
+    if (wrong_direction) {
+      if (retry_depth < 3) {
+        SERIAL_ECHOLNPGM("Wrong homing direction detected, reversing...");
+        // Recursively restart just this move in the opposite direction (-distance)
+        do_homing_move(axis, -distance, fr_mm_s, final_approach, BC_homing, retry_depth + 1);
+      }
+      else {
+        SERIAL_ECHOLNPGM("Homing failed: exceeded max direction retries.");
+      }
+      return; // Skip validate_homing_move for the aborted outer call
+    }
 
     endstops.validate_homing_move(axis);
- 
   }
 
   /**
@@ -1599,8 +1643,6 @@ void prepare_line_to_destination() {
   static bool A_AXIS_HOME = false;
   static bool B_AXIS_HOME = false;
   static bool C_AXIS_HOME = false;
-
-  bool B_HOMING_MISSED = false;
 
   bool endstop_pressed(const AxisEnum axis){
     switch (axis){
@@ -1640,7 +1682,7 @@ void prepare_line_to_destination() {
   void homeaxis(const AxisEnum axis, bool final_home, bool BC_homing) {
 
     bool endstop = endstop_pressed(axis);
-    B_HOMING_MISSED = false;
+
     final_home_move = final_home;
 
     //SERIAL_ECHOLNPGM("ENDSTOP osy je ", endstop);
@@ -1650,7 +1692,7 @@ void prepare_line_to_destination() {
     switch (axis) {
       case A_AXIS: move_length = endstop ? -179 : 179; break;
       case B_AXIS: move_length = endstop ? -179 : 179; break;
-      case C_AXIS: move_length = endstop ? 179 : -170; break;
+      case C_AXIS: move_length = endstop ? 179 : -179; break;
       default: return;
     }
 
@@ -1670,19 +1712,17 @@ void prepare_line_to_destination() {
       //SERIAL_ECHOLNPGM("Není final_home");
       return;
     }
-    if (B_HOMING_MISSED){
-      //SERIAL_ECHOLNPGM("B_HOMING_MISSED");
-      return;
-    }
+
     endstops.not_homing();
+
     // Move away from the endstop by the axis HOMING_BUMP_MM
-    //SERIAL_ECHOLNPGM("Move Away: ", -bump, "mm");
-    do_homing_move(axis, -bump, 0.0, false);
+    // passes the check_direction flag as false (the move is actualy away from sensor here)
+    do_homing_move(axis, -bump, 0.0, false, false, 0, false);
 
     endstops.enable(true);
 
     // Slow move towards endstop until triggered
-    const float rebump = bump * 2;
+    const float rebump = bump * 4; // Bigger rebump so it for sure connects with the sensor
     //SERIAL_ECHOLNPGM("Re-bump: ", rebump, "mm");
     do_homing_move(axis, rebump, get_homing_bump_feedrate(axis), true);
 

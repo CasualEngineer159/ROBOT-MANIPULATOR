@@ -266,7 +266,7 @@ void GcodeSuite::G28() {
       set_axis_home(B_AXIS);
     }
     // Pojistka proti zacyklení
-    loop_counter =+ 1;
+    loop_counter += 1;
     if (loop_counter>10) {
       SERIAL_ECHOLNPGM("Infinite loop");
       break;
