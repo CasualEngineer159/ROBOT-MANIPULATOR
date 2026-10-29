@@ -484,6 +484,10 @@ void Endstops::resync() {
   // Wait for Temperature ISR to run at least once (runs at 1kHz)
   TERN(ENDSTOP_INTERRUPTS_FEATURE, update(), safe_delay(2));
   while (TERN0(ENDSTOP_NOISE_THRESHOLD, endstop_poll_count)) safe_delay(1);
+
+  // Reset the counter for overshoot and old_live_state
+  endstop_poll_count = 0;
+  old_live_state = live_state;
 }
 
 #if ENABLED(PINS_DEBUGGING)

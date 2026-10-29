@@ -136,9 +136,7 @@ class Endstops {
     static volatile endstop_mask_t hit_state; // Use X_MIN, Y_MIN, Z_MIN and Z_MIN_PROBE as BIT index
       // sledování změny endstopu
     static endstop_mask_t old_live_state;
-    static endstop_mask_t endstop_changed;
-    static int endstop_poll_count;
-    
+    static endstop_mask_t endstop_changed;    
 
     #if ENDSTOP_NOISE_THRESHOLD
       static endstop_mask_t validated_live_state;
@@ -147,6 +145,7 @@ class Endstops {
 
   public:
     Endstops() {};
+    static int endstop_poll_count;
 
     /**
      * Initialize the endstop pins

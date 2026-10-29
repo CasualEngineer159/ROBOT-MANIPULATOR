@@ -1575,15 +1575,15 @@ void prepare_line_to_destination() {
 
     line_to_current_position(home_fr_mm_s, true);
 
-    millis_t next_check_ms = millis() + 50; // Wait 50ms to clear the transition edge first
+    millis_t next_check_ms = millis() + 700; // Wait 50ms to clear the transition edge first
     const int8_t actual_dir = (distance > 0) ? 1 : -1;
     bool wrong_direction = false;
 
     while (planner.busy()) {
       idle();
       // Only check direction when endstops are enabled (ignores the -bump backoff move!)
-      if (check_direction && ELAPSED(millis(), next_check_ms)) {
-        next_check_ms = millis() + 50;
+      if (Endstops::endstop_poll_count == 0 && check_direction && ELAPSED(millis(), next_check_ms)) {
+        next_check_ms = millis() + 700;
 
         const bool current_sensor = endstop_pressed(axis);
         const int8_t expected_dir = get_expected_dir(axis, current_sensor);
