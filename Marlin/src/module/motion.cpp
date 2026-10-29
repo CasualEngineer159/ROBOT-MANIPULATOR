@@ -1582,16 +1582,18 @@ void prepare_line_to_destination() {
     while (planner.busy()) {
       idle();
       // Only check direction when endstops are enabled (ignores the -bump backoff move!)
-      if (Endstops::endstop_poll_count == 0 && check_direction && ELAPSED(millis(), next_check_ms)) {
+      if (check_direction && ELAPSED(millis(), next_check_ms)) {
         next_check_ms = millis() + 700;
 
-        const bool current_sensor = endstop_pressed(axis);
-        const int8_t expected_dir = get_expected_dir(axis, current_sensor);
+        if (Endstops::endstop_poll_count == 0) {
+          const bool current_sensor = endstop_pressed(axis);
+          const int8_t expected_dir = get_expected_dir(axis, current_sensor);
 
-        if (actual_dir != expected_dir) {
-          planner.quick_stop(); // Trigger immediate deceleration
-          wrong_direction = true;
-          break;
+          if (actual_dir != expected_dir) {
+            planner.quick_stop(); // Trigger immediate deceleration
+            wrong_direction = true;
+            break;
+          }
         }
       }
     }
