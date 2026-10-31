@@ -31,6 +31,7 @@ extern float segments_per_second;
 extern float add_x;
 extern float add_y;
 extern float add_z;
+extern bool correction_active;
 
 
 #if ENABLED(AXEL_TPARA)

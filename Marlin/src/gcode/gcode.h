@@ -311,6 +311,9 @@
  * M362 - SCARA calibration: Move to cal-position PsiA (0 deg calibration)
  * M363 - SCARA calibration: Move to cal-position PsiB (90 deg calibration - steps per degree)
  * M364 - SCARA calibration: Move to cal-position PSIC (90 deg to Theta calibration position)
+ * M365 S - Save the current position as a SCARA correction point
+ * M365 R - Reset all saved SCARA correction points
+ * M365 P - Toggle SCARA correction
  *
  *** Custom codes (can be changed to suit future G-code standards) ***
  * G425 - Calibrate using a conductive object. (Requires CALIBRATION_GCODE)
@@ -988,6 +991,10 @@ private:
     static bool M362();
     static bool M363();
     static bool M364();
+  #endif
+
+  #if IS_SCARA
+    static void M365();
   #endif
 
   #if EITHER(EXT_SOLENOID, MANUAL_SOLENOID_CONTROL)
