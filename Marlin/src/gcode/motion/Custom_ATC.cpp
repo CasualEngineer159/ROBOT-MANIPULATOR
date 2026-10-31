@@ -88,7 +88,8 @@ void exec_blocking_move(float a, float r, float z, int f = 0) {
     target.z = z;
     
     // G-code feedrate 'f' is in mm/min, but do_blocking_move_to expects mm/s.
-    float fr_mm_s = (f > 0) ? (f / 60.0f) : 0.0f;
+    constexpr int default_feedrate_mm_min = 3000;
+    float fr_mm_s = ((f > 0) ? f : default_feedrate_mm_min) / 60.0f;
     
     do_blocking_move_to(target, fr_mm_s);
 }
@@ -300,7 +301,6 @@ void GcodeSuite::M667() {
 
         float current_A = DEGREES(atan2(current_position.y, current_position.x));
         float current_R = hypot(current_position.x, current_position.y);
-        exec_blocking_move(current_A, current_R, ref_Z + 100);
 
         // 3. Výpočet tras a seřazení (Optimalizace)
         float cur_A = DEGREES(atan2(current_position.y, current_position.x));
@@ -322,6 +322,9 @@ void GcodeSuite::M667() {
                 }
             }
         }
+
+        const float first_scan_A = ref_A + magazine[scan_order[0]].a_offset;
+        exec_blocking_move(first_scan_A, current_R, ref_Z + 100);
 
         // 4. Samotný fyzický sken v optimalizovaném pořadí
         for (int step = 0; step < 3; step++) {
