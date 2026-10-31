@@ -299,7 +299,7 @@ void GcodeSuite::M667() {
             tool_in_hand = -1;
         }
 
-        float current_A = DEGREES(atan2(current_position.y, current_position.x));
+        // float current_A = DEGREES(atan2(current_position.y, current_position.x));
         float current_R = hypot(current_position.x, current_position.y);
 
         // 3. Výpočet tras a seřazení (Optimalizace)
