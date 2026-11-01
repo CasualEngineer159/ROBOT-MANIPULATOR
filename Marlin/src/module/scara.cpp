@@ -55,19 +55,12 @@ float segments_per_second = TERN(AXEL_TPARA, TPARA_SEGMENTS_PER_SECOND, DEFAULT_
     float inverse[4][4];
   };
 
-  static constexpr xyz_pos_t correction_points[] = {
-    {  0, -700, 560 },
-    { 20, -700, 563 },
-    { 20, -720, 561 }
-  };
-
-  static xyz_pos_t apply_correction(const xyz_pos_t &point, const bool inverse);
+  static xyz_pos_t correction_points[SCARA_CORRECTION_POINT_COUNT];
+  static bool correction_matrix_initialized;
 
   static const ScaraCorrectionMatrix &get_correction_matrix() {
     static ScaraCorrectionMatrix matrix;
-    static bool initialized = false;
-
-    if (!initialized) {
+    if (!correction_matrix_initialized) {
       const xyz_pos_t &p0 = correction_points[0],
                       &p1 = correction_points[1],
                       &p2 = correction_points[2];
@@ -127,10 +120,10 @@ float segments_per_second = TERN(AXEL_TPARA, TPARA_SEGMENTS_PER_SECOND, DEFAULT_
 
       }
 
-      initialized = true;
+      correction_matrix_initialized = true;
 
-      for (uint8_t i = 0; i < COUNT(correction_points); ++i) {
-        const xyz_pos_t corrected = apply_correction(correction_points[i], false);
+      for (uint8_t i = 0; i < SCARA_CORRECTION_POINT_COUNT; ++i) {
+        const xyz_pos_t corrected = scara_apply_correction(correction_points[i], false);
         SERIAL_ECHOPGM("SCARA corrected corner ");
         SERIAL_CHAR('0' + i);
         SERIAL_ECHOPGM(": X");
@@ -145,7 +138,7 @@ float segments_per_second = TERN(AXEL_TPARA, TPARA_SEGMENTS_PER_SECOND, DEFAULT_
     return matrix;
   }
 
-  static xyz_pos_t apply_correction(const xyz_pos_t &point, const bool inverse) {
+  xyz_pos_t scara_apply_correction(const xyz_pos_t &point, const bool inverse) {
     const ScaraCorrectionMatrix &matrix = get_correction_matrix();
     const float (*transform)[4] = inverse ? matrix.inverse : matrix.forward;
     xyz_pos_t corrected = point;
@@ -156,6 +149,22 @@ float segments_per_second = TERN(AXEL_TPARA, TPARA_SEGMENTS_PER_SECOND, DEFAULT_
     return corrected;
   }
 
+  bool scara_set_correction_point(const uint8_t index, const xyz_pos_t &point) {
+    if (index >= SCARA_CORRECTION_POINT_COUNT) return false;
+    correction_points[index] = point;
+    correction_matrix_initialized = false;
+    if (index == SCARA_CORRECTION_POINT_COUNT - 1) get_correction_matrix();
+    return true;
+  }
+
+  void scara_reset_correction_matrix() {
+    correction_matrix_initialized = false;
+  }
+
+  const xyz_pos_t &scara_get_correction_point(const uint8_t index) {
+    return correction_points[index];
+  }
+
   void forward_kinematics(const_float_t a, const_float_t b, const_float_t c) {
     const float alfa = RADIANS(a), // prevadime na radiany
                 beta = M_PI/2 + RADIANS(b), // prevadime na radiany
@@ -164,7 +173,6 @@ float segments_per_second = TERN(AXEL_TPARA, TPARA_SEGMENTS_PER_SECOND, DEFAULT_
     cartes.x = cos(alfa)*(cos(beta)*k2 + sin((gama - beta) - (M_PI/2 - beta))*k3+lx);
     cartes.y = -sin(alfa)*(cos(beta)*k2 + sin((gama - beta) - (M_PI/2 - beta))*k3+lx);
     cartes.z = k1 + sin(beta)*k2 - cos((gama - beta) - (M_PI/2 - beta))*k3 -(lz);
-    cartes = apply_correction(cartes, false);
   }
 
 #endif
@@ -218,7 +226,8 @@ bool are_xyz_coordinates_possible(const_float_t &x, const_float_t &y, const_floa
 
       delta = homeposition;
       forward_kinematics(delta.a, delta.b, delta.c);
-      current_position[axis] = cartes[axis];
+      const xyz_pos_t report_cartes = correction_active ? scara_apply_correction(cartes, false) : cartes;
+      current_position[axis] = report_cartes[axis];
 
       //DEBUG_ECHOLNPGM_P(PSTR("Cartesian X"), current_position.x, SP_Y_LBL, current_position.y);
       update_software_endstops(axis);
@@ -232,7 +241,7 @@ bool are_xyz_coordinates_possible(const_float_t &x, const_float_t &y, const_floa
     {
     float alfa, alfares, beta, gamma, received_x,received_y,received_z, d1, d2, beta1, beta2, o1;
 
-    const xyz_pos_t spos = apply_correction(raw, true);
+    const xyz_pos_t spos = correction_active ? scara_apply_correction(raw, true) : raw;
 
     //ERIAL_ECHOLNPGM("jede z  x:", current_position.x, " y:",current_position.y," z:",current_position.z + lz);
     //SERIAL_ECHOLNPGM("jede do x:", received_x, " y:",received_y," z:",received_z);

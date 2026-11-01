@@ -33,6 +33,12 @@ extern float add_y;
 extern float add_z;
 extern bool correction_active;
 
+constexpr uint8_t SCARA_CORRECTION_POINT_COUNT = 3;
+bool scara_set_correction_point(const uint8_t index, const xyz_pos_t &point);
+void scara_reset_correction_matrix();
+const xyz_pos_t &scara_get_correction_point(const uint8_t index);
+xyz_pos_t scara_apply_correction(const xyz_pos_t &point, const bool inverse);
+
 
 #if ENABLED(AXEL_TPARA)
 

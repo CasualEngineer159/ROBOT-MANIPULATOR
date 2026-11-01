@@ -97,9 +97,10 @@
 
     SERIAL_ECHOPGM("FromStp:");
     get_cartesian_from_steppers();  // writes 'cartes' (with forward kinematics)
+    const xyz_pos_t report_cartes = correction_active ? scara_apply_correction(cartes, false) : cartes;
     xyze_pos_t from_steppers = LOGICAL_AXIS_ARRAY(
       planner.get_axis_position_mm(E_AXIS),
-      cartes.x, cartes.y, cartes.z,
+      report_cartes.x, report_cartes.y, report_cartes.z,
       planner.get_axis_position_mm(I_AXIS),
       planner.get_axis_position_mm(J_AXIS),
       planner.get_axis_position_mm(K_AXIS),

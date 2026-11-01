@@ -993,9 +993,7 @@ private:
     static bool M364();
   #endif
 
-  #if IS_SCARA
-    static void M365();
-  #endif
+  static void M365();
 
   #if EITHER(EXT_SOLENOID, MANUAL_SOLENOID_CONTROL)
     static void M380();

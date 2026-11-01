@@ -874,9 +874,7 @@ void GcodeSuite::process_parsed_command(const bool no_ok/*=false*/) {
         case 364: if (M364()) return; break;                      // M364: SCARA Psi pos3 (90 deg to Theta)
       #endif
 
-      #if IS_SCARA
-        case 365: M365(); break;                                  // M365: Save current SCARA correction point
-      #endif
+      case 365: M365(); break;                                    // M365: Save current SCARA correction point
 
       #if EITHER(EXT_SOLENOID, MANUAL_SOLENOID_CONTROL)
         case 380: M380(); break;                                  // M380: Activate solenoid on active (or specified) extruder
