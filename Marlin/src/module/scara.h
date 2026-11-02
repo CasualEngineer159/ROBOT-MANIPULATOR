@@ -84,7 +84,8 @@ xyz_pos_t scara_apply_correction(const xyz_pos_t &point, const bool inverse);
 void inverse_kinematics(
   const xyz_pos_t &raw,
   bool is_only_a_question = false,
-  bool already_checked = false);
+  bool already_checked = false,
+  bool external_coordinates = false);
 void scara_set_axis_is_at_home(const AxisEnum axis);
 void scara_report_positions();
 bool are_angles_possible(const_float_t &a, const_float_t &b, const_float_t &c);

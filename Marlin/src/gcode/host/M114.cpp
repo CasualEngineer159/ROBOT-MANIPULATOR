@@ -85,8 +85,11 @@
     }
     SERIAL_EOL();
 
+    get_cartesian_from_steppers();  // writes 'cartes' (with forward kinematics)
+    const xyz_pos_t report_cartes = correction_active ? scara_apply_correction(cartes, false) : cartes;
+
     #if IS_SCARA
-      const xyz_float_t deg = {
+      const abc_float_t deg = {
         planner.get_axis_position_degrees(A_AXIS),
         planner.get_axis_position_degrees(B_AXIS),
         planner.get_axis_position_degrees(C_AXIS)
@@ -96,8 +99,6 @@
     #endif
 
     SERIAL_ECHOPGM("FromStp:");
-    get_cartesian_from_steppers();  // writes 'cartes' (with forward kinematics)
-    const xyz_pos_t report_cartes = correction_active ? scara_apply_correction(cartes, false) : cartes;
     xyze_pos_t from_steppers = LOGICAL_AXIS_ARRAY(
       planner.get_axis_position_mm(E_AXIS),
       report_cartes.x, report_cartes.y, report_cartes.z,

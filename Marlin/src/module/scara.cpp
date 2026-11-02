@@ -226,8 +226,7 @@ bool are_xyz_coordinates_possible(const_float_t &x, const_float_t &y, const_floa
 
       delta = homeposition;
       forward_kinematics(delta.a, delta.b, delta.c);
-      const xyz_pos_t report_cartes = correction_active ? scara_apply_correction(cartes, false) : cartes;
-      current_position[axis] = report_cartes[axis];
+      current_position[axis] = cartes[axis];
 
       //DEBUG_ECHOLNPGM_P(PSTR("Cartesian X"), current_position.x, SP_Y_LBL, current_position.y);
       update_software_endstops(axis);
@@ -237,11 +236,12 @@ bool are_xyz_coordinates_possible(const_float_t &x, const_float_t &y, const_floa
   void inverse_kinematics(
     const xyz_pos_t &raw,
     bool is_only_a_question,
-    bool already_checked)
+    bool already_checked,
+    bool external_coordinates)
     {
     float alfa, alfares, beta, gamma, received_x,received_y,received_z, d1, d2, beta1, beta2, o1;
 
-    const xyz_pos_t spos = correction_active ? scara_apply_correction(raw, true) : raw;
+    const xyz_pos_t spos = external_coordinates && correction_active ? scara_apply_correction(raw, true) : raw;
 
     //ERIAL_ECHOLNPGM("jede z  x:", current_position.x, " y:",current_position.y," z:",current_position.z + lz);
     //SERIAL_ECHOLNPGM("jede do x:", received_x, " y:",received_y," z:",received_z);
@@ -410,7 +410,11 @@ bool are_xyz_coordinates_possible(const_float_t &x, const_float_t &y, const_floa
     sync_plan_position();
   }
 
-  void inverse_kinematics(const xyz_pos_t &raw) {
+  void inverse_kinematics(
+    const xyz_pos_t &raw,
+    bool,
+    bool,
+    bool) {
     const xyz_pos_t spos = raw - robot_offset;
 
     const float RXY = SQRT(HYPOT2(spos.x, spos.y)),

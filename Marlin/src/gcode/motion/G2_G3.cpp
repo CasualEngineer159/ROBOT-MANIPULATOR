@@ -353,7 +353,7 @@ void plan_arc(
       );
 
       //apply_motion_limits(raw);
-      inverse_kinematics(raw, true);
+      inverse_kinematics(raw, true, false, true);
       if (kinematic_calc_failiure){
         kinematic_calc_failiure = false;
         break;
@@ -385,7 +385,7 @@ void plan_arc(
   #endif
 
   //apply_motion_limits(raw);
-  inverse_kinematics(raw, true);
+  inverse_kinematics(raw, true, false, true);
   if (kinematic_calc_failiure){
     kinematic_calc_failiure = false;
     return;

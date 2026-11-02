@@ -3156,7 +3156,7 @@ bool Planner::buffer_line(const xyze_pos_t &cart, const_feedRate_t fr_mm_s
 
     if (!ph.move_to_delta){ //Vykašleme se na cart a frknem tam rovnou deltu. Musí být nastavena předem.
       // Cartesian XYZ to kinematic ABC, stored in global 'delta'
-      inverse_kinematics(machine, false, ph.movement_possibility_already_checked);
+      inverse_kinematics(machine, false, ph.movement_possibility_already_checked, true);
 
       if (kinematic_calc_failiure == true){
         kinematic_calc_failiure = false;

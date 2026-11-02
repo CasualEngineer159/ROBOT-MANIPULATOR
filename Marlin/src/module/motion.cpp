@@ -215,10 +215,9 @@ inline void report_logical_position(const xyze_pos_t &rpos) {
 // Forward kinematics and un-leveling are applied.
 void report_real_position() {
   get_cartesian_from_steppers();
-  const xyz_pos_t report_cartes = correction_active ? scara_apply_correction(cartes, false) : cartes;
   xyze_pos_t npos = LOGICAL_AXIS_ARRAY(
     planner.get_axis_position_mm(E_AXIS),
-    report_cartes.x, report_cartes.y, report_cartes.z,
+    cartes.x, cartes.y, cartes.z,
     cartes.i, cartes.j, cartes.k,
     cartes.u, cartes.v, cartes.w
   );
@@ -266,8 +265,7 @@ void report_current_position_projected() {
    */
   void report_current_position_moving() {
     get_cartesian_from_steppers();
-    const xyz_pos_t report_cartes = correction_active ? scara_apply_correction(cartes, false) : cartes;
-    const xyz_pos_t lpos = report_cartes.asLogical();
+    const xyz_pos_t lpos = cartes.asLogical();
 
     SERIAL_ECHOPGM_P(
       LIST_N(DOUBLE(NUM_AXES),
@@ -462,13 +460,6 @@ void get_cartesian_from_steppers() {
 void set_current_from_steppers_for_axis(const AxisEnum axis) {
   get_cartesian_from_steppers();
   xyze_pos_t pos = cartes;
-
-  if (correction_active) {
-    const xyz_pos_t corrected = scara_apply_correction(cartes, false);
-    pos.x = corrected.x;
-    pos.y = corrected.y;
-    pos.z = corrected.z;
-  }
 
   TERN_(HAS_EXTRUDERS, pos.e = planner.get_axis_position_mm(E_AXIS));
 
@@ -1120,7 +1111,7 @@ FORCE_INLINE void segment_idle(millis_t &next_idle_ms) {
     // Fail if attempting move outside printable radius
     //if (!position_is_reachable(destination)) return true;
 
-    inverse_kinematics(destination, true);
+    inverse_kinematics(destination, true, false, true);
     if (kinematic_calc_failiure) {
       kinematic_calc_failiure = false;
       //SERIAL_ECHOLNPGM("Segmentovaný pohyb zastaven v motion.ccp line_to_destination_kinematic()");
@@ -1807,6 +1798,7 @@ void direct_angle_change(const abc_pos_t &angles){
   
   //SERIAL_ECHOLNPGM("Úhly prošli kontrolou");
   forward_kinematics(alfa, beta, gamma);
-  destination = correction_active ? scara_apply_correction(cartes, false) : cartes;
+  destination = cartes;
   prepare_fast_move_to_destination();
 }
+

@@ -91,10 +91,6 @@ void GcodeSuite::M166() {
     #if ENABLED(DELTA)
       get_cartesian_from_steppers();
       SERIAL_ECHO(cartes.z);
-    #elif IS_SCARA
-      get_cartesian_from_steppers();
-      const xyz_pos_t report_cartes = correction_active ? scara_apply_correction(cartes, false) : cartes;
-      SERIAL_ECHO(report_cartes.z);
     #else
       SERIAL_ECHO(planner.get_axis_position_mm(Z_AXIS));
     #endif
