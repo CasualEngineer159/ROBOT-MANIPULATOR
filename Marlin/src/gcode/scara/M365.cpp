@@ -14,104 +14,52 @@
 #include "../parser.h"
 #include "../../module/motion.h"
 #include "../../module/planner.h"
-#include "../../module/scara.h"
-
-bool correction_active;
-
-namespace {
-  uint8_t saved_correction_points;
-
-  void report_correction_state() {
-    SERIAL_ECHOPGM("SCARA correction active: ");
-    SERIAL_ECHOLNPGM(correction_active ? "TRUE" : "FALSE");
-  }
-
-  void set_correction_active(const bool active) {
-    if (correction_active == active) return;
-
-    const xyz_pos_t current = {
-      current_position.x,
-      current_position.y,
-      current_position.z
-    };
-    const xyz_pos_t converted = scara_apply_correction(current, active);
-    current_position.x = converted.x;
-    current_position.y = converted.y;
-    current_position.z = converted.z;
-    correction_active = active;
-    sync_plan_position();
-    report_correction_state();
-  }
-}
+#include "../../module/bed_correction.h"
 
 /**
- * M365: Save, reset, or toggle SCARA correction points and correction.
+ * M365 S: Save the current real position as the next bed correction corner.
+ *         After three corners are saved, the bed correction is calculated and applied to
+ *         incoming G0-G3 XYZ and to outgoing XYZ reports (M114).
+ * M365 R: Reset the saved corners and disable the bed correction.
  */
 void GcodeSuite::M365() {
   planner.synchronize();
 
   if (parser.seen_test('R')) {
-    saved_correction_points = 0;
-    set_correction_active(false);
-    scara_reset_correction_matrix();
-    SERIAL_ECHOLNPGM("SCARA correction points reset.");
+    bed_correction_reset();
+    SERIAL_ECHOLNPGM("Bed correction reset.");
     return;
   }
 
-  if (parser.seen_test('P')) {
-    if (saved_correction_points < SCARA_CORRECTION_POINT_COUNT) {
-      set_correction_active(false);
-      SERIAL_ECHOLNPGM("SCARA correction remains inactive until three points are saved.");
+  if (parser.seen_test('T')) {
+    if (!bed_correction_toggle()) {
+      SERIAL_ECHOLNPGM("Bed correction is not calibrated. Save three corners with M365 S first.");
+      return;
     }
-    else {
-      set_correction_active(!correction_active);
-    }
+    SERIAL_ECHOLNPGM("Bed correction turned ", bed_correction_is_active() ? "on." : "off.");
     return;
   }
 
   if (!parser.seen_test('S')) {
-    SERIAL_ECHOLNPGM("M365 requires S (save), R (reset), or P (toggle).");
+    SERIAL_ECHOLNPGM("M365 requires S (save corner), T (toggle) or R (reset).");
     return;
   }
 
-  if (saved_correction_points >= SCARA_CORRECTION_POINT_COUNT) {
-    SERIAL_ECHOLNPGM("SCARA correction points already saved.");
+  if (bed_correction_saved_count() >= BED_CORRECTION_POINT_COUNT) {
+    SERIAL_ECHOLNPGM("Three corners already saved. Use M365 R to start over.");
     return;
   }
 
-  xyz_pos_t point;
-  point.x = current_position.x;
-  point.y = current_position.y;
-  point.z = current_position.z;
-  scara_set_correction_point(saved_correction_points, point);
-  ++saved_correction_points;
+  const uint8_t index = bed_correction_saved_count();
+  const xyz_pos_t point = { current_position.x, current_position.y, current_position.z };
+  bed_correction_set_point(index, point);
 
-  SERIAL_ECHOPGM("SCARA correction point ");
-  SERIAL_ECHO(saved_correction_points);
-  SERIAL_ECHOPGM("/");
-  SERIAL_ECHO(SCARA_CORRECTION_POINT_COUNT);
-  SERIAL_ECHOPGM(" saved: X");
-  SERIAL_ECHO_F(current_position.x, 3);
-  SERIAL_ECHOPGM(" Y");
-  SERIAL_ECHO_F(current_position.y, 3);
-  SERIAL_ECHOPGM(" Z");
-  SERIAL_ECHO_F(current_position.z, 3);
-  SERIAL_EOL();
+  SERIAL_ECHOPGM("Bed correction corner ");
+  SERIAL_ECHO(index + 1);
+  SERIAL_ECHOLNPGM("/", BED_CORRECTION_POINT_COUNT, " saved.");
 
-  if (saved_correction_points == SCARA_CORRECTION_POINT_COUNT) {
-    set_correction_active(true);
-    SERIAL_ECHOLNPGM("SCARA correction points complete:");
-    for (uint8_t i = 0; i < SCARA_CORRECTION_POINT_COUNT; ++i) {
-      const xyz_pos_t &point = scara_get_correction_point(i);
-      SERIAL_ECHOPGM("Point ");
-      SERIAL_ECHO(i + 1);
-      SERIAL_ECHOPGM(": X");
-      SERIAL_ECHO_F(point.x, 3);
-      SERIAL_ECHOPGM(" Y");
-      SERIAL_ECHO_F(point.y, 3);
-      SERIAL_ECHOPGM(" Z");
-      SERIAL_ECHO_F(point.z, 3);
-      SERIAL_EOL();
-    }
-  }
+  if (bed_correction_is_calibrated())
+    SERIAL_ECHOLNPGM("Bed correction calibrated and active.");
+  else if (bed_correction_saved_count() == BED_CORRECTION_POINT_COUNT)
+    SERIAL_ECHOLNPGM("Corners are collinear, bed correction not calibrated. Use M365 R and retry.");
 }

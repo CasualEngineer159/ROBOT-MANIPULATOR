@@ -75,6 +75,7 @@ void GcodeSuite::G0_G1(TERN_(HAS_FAST_MOVES, const bool fast_move/*=false*/)) {
     #endif
 
     get_destination_from_command();                 // Get X Y [Z[I[J[K]]]] [E] F (and set cutter power)
+    apply_bed_correction_to_destination();          // Ideal XYZ from G-code -> real XYZ for the robot
 
     #ifdef G0_FEEDRATE
       if (fast_move) {

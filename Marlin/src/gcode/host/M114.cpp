@@ -25,6 +25,7 @@
 #include "../gcode.h"
 #include "../../module/motion.h"
 #include "../../module/stepper.h"
+#include "../../module/bed_correction.h"
 
 
 #if ENABLED(M114_DETAIL)
@@ -40,6 +41,15 @@
   }
   inline void report_linear_axis_pos(const xyze_pos_t &pos) { report_all_axis_pos(pos, XYZ); }
 
+  // Report XYZ in the ideal frame when bed correction is active
+  xyze_pos_t bed_corrected(const xyze_pos_t &pos) {
+    if (!bed_correction_is_active()) return pos;
+    xyze_pos_t out = pos;
+    const xyz_pos_t ideal = bed_correction_real_to_ideal({ pos.x, pos.y, pos.z });
+    out.x = ideal.x; out.y = ideal.y; out.z = ideal.z;
+    return out;
+  }
+
   void report_linear_axis_pos(const xyz_pos_t &pos, const uint8_t precision=3) {
     char str[12];
     LOOP_NUM_AXES(a) SERIAL_ECHOPGM_P((PGM_P)pgm_read_ptr(&SP_AXIS_LBL[a]), dtostrf(pos[a], 1, precision, str));
@@ -49,11 +59,11 @@
   void report_current_position_detail() {
     // Position as sent by G-code
     SERIAL_ECHOPGM("\nLogical:");
-    report_linear_axis_pos(current_position.asLogical());
+    report_linear_axis_pos(bed_corrected(current_position.asLogical()));
 
     // Cartesian position in native machine space
     SERIAL_ECHOPGM("Raw:    ");
-    report_linear_axis_pos(current_position);
+    report_linear_axis_pos(bed_corrected(current_position));
 
     xyze_pos_t leveled = current_position;
 
@@ -85,11 +95,8 @@
     }
     SERIAL_EOL();
 
-    get_cartesian_from_steppers();  // writes 'cartes' (with forward kinematics)
-    const xyz_pos_t report_cartes = correction_active ? scara_apply_correction(cartes, false) : cartes;
-
     #if IS_SCARA
-      const abc_float_t deg = {
+      const xyz_float_t deg = {
         planner.get_axis_position_degrees(A_AXIS),
         planner.get_axis_position_degrees(B_AXIS),
         planner.get_axis_position_degrees(C_AXIS)
@@ -99,9 +106,10 @@
     #endif
 
     SERIAL_ECHOPGM("FromStp:");
+    get_cartesian_from_steppers();  // writes 'cartes' (with forward kinematics)
     xyze_pos_t from_steppers = LOGICAL_AXIS_ARRAY(
       planner.get_axis_position_mm(E_AXIS),
-      report_cartes.x, report_cartes.y, report_cartes.z,
+      cartes.x, cartes.y, cartes.z,
       planner.get_axis_position_mm(I_AXIS),
       planner.get_axis_position_mm(J_AXIS),
       planner.get_axis_position_mm(K_AXIS),
@@ -109,8 +117,9 @@
       planner.get_axis_position_mm(V_AXIS),
       planner.get_axis_position_mm(W_AXIS)
     );
-    report_all_axis_pos(from_steppers);
+    report_all_axis_pos(bed_corrected(from_steppers));
 
+    // Diff is a real-frame check (planner vs. steppers), so it is not corrected
     const xyze_float_t diff = from_steppers - leveled;
     SERIAL_ECHOPGM("Diff:   ");
     report_all_axis_pos(diff);

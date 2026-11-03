@@ -35,6 +35,7 @@ GcodeSuite gcode;
 #include "parser.h"
 #include "queue.h"
 #include "../module/motion.h"
+#include "../module/bed_correction.h"
 
 #if ENABLED(PRINTCOUNTER)
   #include "../module/printcounter.h"
@@ -163,6 +164,31 @@ int8_t GcodeSuite::get_target_e_stepper_from_command(const int8_t dval/*=-1*/) {
   else
     SERIAL_ECHOLNPGM(" " STR_INVALID_E_STEPPER " ", e);
   return -1;
+}
+
+/**
+ * Convert the XYZ destination of a G0-G3 command from the ideal (user) frame to the real robot frame.
+ * Called after get_destination_from_command(). Words not given in the command keep the real current position.
+ */
+void GcodeSuite::apply_bed_correction_to_destination() {
+  if (!bed_correction_is_active()) return;
+
+  const bool seen_x = parser.seenval('X'), seen_y = parser.seenval('Y'), seen_z = parser.seenval('Z');
+  if (!seen_x && !seen_y && !seen_z) return;
+
+  // Ideal current point: this is what the user last commanded
+  xyz_pos_t ideal_dest = bed_correction_real_to_ideal({ current_position.x, current_position.y, current_position.z });
+
+  // Overwrite only the axes given in the command with the values parsed in the ideal frame (relative moves add to the ideal current point)
+  if (seen_x) ideal_dest.x = (axis_is_relative(X_AXIS) ? ideal_dest.x : 0) + parser.value_axis_units(X_AXIS);
+  if (seen_y) ideal_dest.y = (axis_is_relative(Y_AXIS) ? ideal_dest.y : 0) + parser.value_axis_units(Y_AXIS);
+  if (seen_z) ideal_dest.z = (axis_is_relative(Z_AXIS) ? ideal_dest.z : 0) + parser.value_axis_units(Z_AXIS);
+
+  // The user's ideal point is the source of truth, so all three real components follow from it
+  const xyz_pos_t real_dest = bed_correction_ideal_to_real(ideal_dest);
+  destination.x = real_dest.x;
+  destination.y = real_dest.y;
+  destination.z = real_dest.z;
 }
 
 /**

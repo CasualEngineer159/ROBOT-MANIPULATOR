@@ -28,6 +28,7 @@
 #include "../../module/motion.h"
 #include "../../module/planner.h"
 #include "../../module/temperature.h"
+#include "../../module/bed_correction.h"
 
 #if ENABLED(DELTA)
   #include "../../module/delta.h"
@@ -353,7 +354,7 @@ void plan_arc(
       );
 
       //apply_motion_limits(raw);
-      inverse_kinematics(raw, true, false, true);
+      inverse_kinematics(raw, true);
       if (kinematic_calc_failiure){
         kinematic_calc_failiure = false;
         break;
@@ -385,7 +386,7 @@ void plan_arc(
   #endif
 
   //apply_motion_limits(raw);
-  inverse_kinematics(raw, true, false, true);
+  inverse_kinematics(raw, true);
   if (kinematic_calc_failiure){
     kinematic_calc_failiure = false;
     return;
@@ -449,6 +450,7 @@ void GcodeSuite::G2_G3(const bool clockwise) {
     #endif
 
     get_destination_from_command();   // Get X Y [Z[I[J[K...]]]] [E] F (and set cutter power)
+    apply_bed_correction_to_destination();
 
     TERN_(SF_ARC_FIX, relative_mode = relative_mode_backup);
 
@@ -482,6 +484,16 @@ void GcodeSuite::G2_G3(const bool clockwise) {
       #endif
       if (parser.seenval(achar)) arc_offset.a = parser.value_linear_units();
       if (parser.seenval(bchar)) arc_offset.b = parser.value_linear_units();
+
+      // I/J are ideal-frame offsets from the ideal current point to the arc center.
+      // Convert the center to real and take the offset from the real current position.
+      if (bed_correction_is_active()) {
+        const xyz_pos_t ideal_cur = bed_correction_real_to_ideal({ current_position.x, current_position.y, current_position.z });
+        const xyz_pos_t ideal_center = { ideal_cur.x + arc_offset.a, ideal_cur.y + arc_offset.b, ideal_cur.z };
+        const xyz_pos_t real_center = bed_correction_ideal_to_real(ideal_center);
+        arc_offset.a = real_center.x - current_position.x;
+        arc_offset.b = real_center.y - current_position.y;
+      }
     }
 
     if (arc_offset) {
