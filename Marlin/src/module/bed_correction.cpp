@@ -26,7 +26,8 @@ namespace {
     enabled = false;
     if (point_count < BED_CORRECTION_POINT_COUNT) return;
 
-    // Find the longest side of the triangle; its midpoint is the ideal origin.
+    // 1. Find the longest side of the triangle (the rectangle's diagonal);
+    //    its midpoint is the center of the rectangular bed.
     const float d01 = dist(points[0], points[1]),
                 d12 = dist(points[1], points[2]),
                 d20 = dist(points[2], points[0]);
@@ -37,30 +38,58 @@ namespace {
 
     center.set((a->x + b->x) * 0.5f, (a->y + b->y) * 0.5f, (a->z + b->z) * 0.5f);
 
-    // Ideal x axis: from the origin toward the opposite corner (in the bed plane).
-    // Ideal y axis: in the bed plane, perpendicular to x, on the side of the triangle.
-    // Ideal z axis: bed normal, pointing away from the triangle's side.
-    const xyz_pos_t ex = { opposite->x - center.x, opposite->y - center.y, opposite->z - center.z };
-    const float ex_len = SQRT(sq(ex.x) + sq(ex.y) + sq(ex.z));
-    if (ex_len < 0.0001f) return;  // Degenerate (collinear) points
-
+    // 2. Compute the bed normal from the triangle edges.
     const xyz_pos_t ab = { b->x - a->x, b->y - a->y, b->z - a->z };
-    float nx = ab.y * ex.z - ab.z * ex.y,   // normal = ab x ex (any triangle normal)
-          ny = ab.z * ex.x - ab.x * ex.z,
-          nz = ab.x * ex.y - ab.y * ex.x;
+    const xyz_pos_t ac = { opposite->x - a->x, opposite->y - a->y, opposite->z - a->z };
+
+    float nx = ab.y * ac.z - ab.z * ac.y,
+          ny = ab.z * ac.x - ab.x * ac.z,
+          nz = ab.x * ac.y - ab.y * ac.x;
     const float n_len = SQRT(sq(nx) + sq(ny) + sq(nz));
-    if (n_len < 0.0001f) return;  // Collinear corners
+    if (n_len < 0.0001f) return; // Degenerate (collinear) corners
     nx /= n_len; ny /= n_len; nz /= n_len;
 
-    const float ux = ex.x / ex_len, uy = ex.y / ex_len, uz = ex.z / ex_len;
-    // In-plane y axis = n x u (orthogonal to both, so the basis is right-handed)
-    const float vx = ny * uz - nz * uy,
-                vy = nz * ux - nx * uz,
-                vz = nx * uy - ny * ux;
+    // Rule: The new Z axis must always point up (angle with old +Z < 90 deg => nz > 0).
+    // If nz < 0, flipping the normal is equivalent to swapping points 1 and 2.
+    if (nz < 0.0f) {
+      nx = -nx; ny = -ny; nz = -nz;
+    }
+
+    // 3. Rule: Point 0 lies at +45 degrees between the new +X and +Y axes.
+    // Vector from center to points[0], projected onto the plane for numerical stability:
+    float dx = points[0].x - center.x,
+          dy = points[0].y - center.y,
+          dz = points[0].z - center.z;
+    const float d_dot_n = dx * nx + dy * ny + dz * nz;
+    dx -= d_dot_n * nx;
+    dy -= d_dot_n * ny;
+    dz -= d_dot_n * nz;
+
+    const float d_len = SQRT(sq(dx) + sq(dy) + sq(dz));
+    if (d_len < 0.0001f) return;
+    dx /= d_len; dy /= d_len; dz /= d_len;
+
+    // In-plane unit vector q = n x d (+90 degrees CCW from d around +n)
+    const float qx = ny * dz - nz * dy,
+                qy = nz * dx - nx * dz,
+                qz = nx * dy - ny * dx;
+
+    // Rotate d by -45 deg around n to get new +X (u), and +45 deg to get new +Y (v):
+    // u = cos(45)*d - sin(45)*q
+    // v = cos(45)*d + sin(45)*q  (which equals n x u)
+    constexpr float INV_SQRT2 = 0.70710678f;
+    const float ux = INV_SQRT2 * (dx - qx),
+                uy = INV_SQRT2 * (dy - qy),
+                uz = INV_SQRT2 * (dz - qz);
+
+    const float vx = INV_SQRT2 * (dx + qx),
+                vy = INV_SQRT2 * (dy + qy),
+                vz = INV_SQRT2 * (dz + qz);
 
     rot[0][0] = ux; rot[0][1] = uy; rot[0][2] = uz;
     rot[1][0] = vx; rot[1][1] = vy; rot[1][2] = vz;
     rot[2][0] = nx; rot[2][1] = ny; rot[2][2] = nz;
+
     calibrated = true;
     enabled = true;
   }
