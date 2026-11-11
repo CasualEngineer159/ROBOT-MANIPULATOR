@@ -33,6 +33,7 @@
 #include "../lcd/marlinui.h"
 #include "../inc/MarlinConfig.h"
 #include "scara.h"
+#include "bed_correction.h"
 
 #if IS_SCARA
   #include "../libs/buzzer.h"
@@ -189,9 +190,14 @@ inline void report_more_positions() {
   TERN_(IS_SCARA, scara_report_positions());
 }
 
-// Report the logical position for a given machine position
+// Report the logical position for a given machine position.
+// XYZ are reported in the ideal (bed-corrected) frame when a bed correction is active.
 inline void report_logical_position(const xyze_pos_t &rpos) {
-  const xyze_pos_t lpos = rpos.asLogical();
+  xyze_pos_t lpos = rpos.asLogical();
+  if (bed_correction_is_active()) {
+    const xyz_pos_t ideal = bed_correction_real_to_ideal({ lpos.x, lpos.y, lpos.z });
+    lpos.x = ideal.x; lpos.y = ideal.y; lpos.z = ideal.z;
+  }
   SERIAL_ECHOPGM_P(
     LIST_N(DOUBLE(NUM_AXES),
          X_LBL, lpos.x,
@@ -209,6 +215,7 @@ inline void report_logical_position(const xyze_pos_t &rpos) {
     #endif
   );
   SERIAL_ECHOLNPGM(" Robot angles set to A:", delta.a, " B:", delta.b, " C:", delta.c);
+  SERIAL_ECHOLNPGM("XYZ corrected: ", bed_correction_is_active() ? "TRUE" : "FALSE");
 }
 
 // Report the real current position according to the steppers.

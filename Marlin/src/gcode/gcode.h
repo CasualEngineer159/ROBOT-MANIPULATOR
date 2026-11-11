@@ -313,6 +313,9 @@
  * M362 - SCARA calibration: Move to cal-position PsiA (0 deg calibration)
  * M363 - SCARA calibration: Move to cal-position PsiB (90 deg calibration - steps per degree)
  * M364 - SCARA calibration: Move to cal-position PSIC (90 deg to Theta calibration position)
+ * M365 S - Save the current position as a SCARA correction point
+ * M365 R - Reset all saved SCARA correction points
+ * M365 P - Toggle SCARA correction
  *
  *** Custom codes (can be changed to suit future G-code standards) ***
  * G425 - Calibrate using a conductive object. (Requires CALIBRATION_GCODE)
@@ -426,6 +429,7 @@ public:
   static int8_t get_target_extruder_from_command();
   static int8_t get_target_e_stepper_from_command(const int8_t dval=-1);
   static void get_destination_from_command();
+  static void apply_bed_correction_to_destination();
 
   static void process_parsed_command(const bool no_ok=false);
   static void process_next_command();
@@ -991,6 +995,8 @@ private:
     static bool M363();
     static bool M364();
   #endif
+
+  static void M365();
 
   #if EITHER(EXT_SOLENOID, MANUAL_SOLENOID_CONTROL)
     static void M380();

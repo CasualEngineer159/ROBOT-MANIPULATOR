@@ -28,6 +28,7 @@
 #include "../../module/motion.h"
 #include "../../module/planner.h"
 #include "../../module/temperature.h"
+#include "../../module/bed_correction.h"
 
 #if ENABLED(DELTA)
   #include "../../module/delta.h"
@@ -63,6 +64,15 @@ void plan_arc(
   const bool clockwise,     // Clockwise?
   const uint8_t circles     // Take the scenic route
 ) {
+  const bool bed_correction = bed_correction_is_active();
+  const xyze_pos_t real_start = current_position;
+  xyze_pos_t arc_start = real_start;
+  if (bed_correction) {
+    const xyz_pos_t ideal = bed_correction_real_to_ideal({ real_start.x, real_start.y, real_start.z });
+    arc_start.x = ideal.x;
+    arc_start.y = ideal.y;
+    arc_start.z = ideal.z;
+  }
   #if ENABLED(CNC_WORKSPACE_PLANES)
     AxisEnum axis_p, axis_q, axis_l;
     switch (gcode.workspace_plane) {
@@ -79,19 +89,19 @@ void plan_arc(
   ab_float_t rvec = -offset;
 
   const float radius = HYPOT(rvec.a, rvec.b),
-              center_P = current_position[axis_p] - rvec.a,
-              center_Q = current_position[axis_q] - rvec.b,
+              center_P = arc_start[axis_p] - rvec.a,
+              center_Q = arc_start[axis_q] - rvec.b,
               rt_X = cart[axis_p] - center_P,
               rt_Y = cart[axis_q] - center_Q;
 
   ARC_LIJKUVW_CODE(
-    const float start_L = current_position[axis_l],
-    const float start_I = current_position.i,
-    const float start_J = current_position.j,
-    const float start_K = current_position.k,
-    const float start_U = current_position.u,
-    const float start_V = current_position.v,
-    const float start_W = current_position.w
+    const float start_L = arc_start[axis_l],
+    const float start_I = arc_start.i,
+    const float start_J = arc_start.j,
+    const float start_K = arc_start.k,
+    const float start_U = arc_start.u,
+    const float start_V = arc_start.v,
+    const float start_W = arc_start.w
   );
 
   // Angle of rotation between position and target from the circle center.
@@ -101,7 +111,7 @@ void plan_arc(
   uint16_t min_segments = 1;
 
   // Do a full circle if starting and ending positions are "identical"
-  if (NEAR(current_position[axis_p], cart[axis_p]) && NEAR(current_position[axis_q], cart[axis_q])) {
+  if (NEAR(arc_start[axis_p], cart[axis_p]) && NEAR(arc_start[axis_q], cart[axis_q])) {
     // Preserve direction for circles
     angular_travel = clockwise ? -RADIANS(360) : RADIANS(360);
     abs_angular_travel = RADIANS(360);
@@ -135,7 +145,7 @@ void plan_arc(
     float travel_U = cart.u       - start_U,
     float travel_V = cart.v       - start_V,
     float travel_W = cart.w       - start_W,
-    float travel_E = cart.e       - current_position.e
+    float travel_E = cart.e       - arc_start.e
   );
 
   // If "P" specified circles, call plan_arc recursively then continue with the rest of the arc
@@ -154,7 +164,7 @@ void plan_arc(
       const float per_circle_E = travel_E * part_per_circle     // E movement per circle
     );
 
-    xyze_pos_t temp_position = current_position;
+    xyze_pos_t temp_position = arc_start;
     for (uint16_t n = circles; n--;) {
       ARC_LIJKUVWE_CODE(                                           // Destination Linear Axes
         temp_position[axis_l] += per_circle_L,
@@ -168,15 +178,22 @@ void plan_arc(
       );
       plan_arc(temp_position, offset, clockwise, 0);            // Plan a single whole circle
     }
+    // The circles moved the machine, so the remaining arc starts from its current ideal position
+    arc_start = current_position;
+    if (bed_correction) {
+      const xyz_pos_t ideal = bed_correction_real_to_ideal({ current_position.x, current_position.y, current_position.z });
+      arc_start.x = ideal.x; arc_start.y = ideal.y; arc_start.z = ideal.z;
+    }
+
     ARC_LIJKUVWE_CODE(
-      travel_L = cart[axis_l] - current_position[axis_l],
-      travel_I = cart.i       - current_position.i,
-      travel_J = cart.j       - current_position.j,
-      travel_K = cart.k       - current_position.k,
-      travel_U = cart.u       - current_position.u,
-      travel_V = cart.v       - current_position.v,
-      travel_W = cart.w       - current_position.w,
-      travel_E = cart.e       - current_position.e
+      travel_L = cart[axis_l] - arc_start[axis_l],
+      travel_I = cart.i       - arc_start.i,
+      travel_J = cart.j       - arc_start.j,
+      travel_K = cart.k       - arc_start.k,
+      travel_U = cart.u       - arc_start.u,
+      travel_V = cart.v       - arc_start.v,
+      travel_W = cart.w       - arc_start.w,
+      travel_E = cart.e       - arc_start.e
     );
   }
 
@@ -277,14 +294,14 @@ void plan_arc(
 
     // Initialize all linear axes and E
     ARC_LIJKUVWE_CODE(
-      raw[axis_l] = current_position[axis_l],
-      raw.i       = current_position.i,
-      raw.j       = current_position.j,
-      raw.k       = current_position.k,
-      raw.u       = current_position.u,
-      raw.v       = current_position.v,
-      raw.w       = current_position.w,
-      raw.e       = current_position.e
+      raw[axis_l] = arc_start[axis_l],
+      raw.i       = arc_start.i,
+      raw.j       = arc_start.j,
+      raw.k       = arc_start.k,
+      raw.u       = arc_start.u,
+      raw.v       = arc_start.v,
+      raw.w       = arc_start.w,
+      raw.e       = arc_start.e
     );
 
     millis_t next_idle_ms = millis() + 200UL;
@@ -352,22 +369,29 @@ void plan_arc(
         , raw.e += extruder_per_segment
       );
 
-      //apply_motion_limits(raw);
-      inverse_kinematics(raw, true);
+      // raw stays in the ideal frame for geometry; the real copy goes to the robot
+      xyze_pos_t real_raw = raw;
+      if (bed_correction) {
+        const xyz_pos_t real = bed_correction_ideal_to_real({ raw.x, raw.y, raw.z });
+        real_raw.x = real.x; real_raw.y = real.y; real_raw.z = real.z;
+      }
+
+      //apply_motion_limits(real_raw);
+      inverse_kinematics(real_raw, true);
       if (kinematic_calc_failiure){
         kinematic_calc_failiure = false;
         break;
       }
       hints.movement_possibility_already_checked = true;
       #if HAS_LEVELING && !PLANNER_LEVELING
-        planner.apply_leveling(raw);
+        planner.apply_leveling(real_raw);
       #endif
 
       // calculate safe speed for stopping by the end of the arc
       arc_mm_remaining -= segment_mm;
       hints.safe_exit_speed_sqr = _MIN(limiting_speed_sqr, 2 * limiting_accel * arc_mm_remaining);
 
-      if (!planner.buffer_line(raw, scaled_fr_mm_s, active_extruder, hints))
+      if (!planner.buffer_line(real_raw, scaled_fr_mm_s, active_extruder, hints))
         break;
 
       hints.curve_radius = radius;
@@ -384,8 +408,14 @@ void plan_arc(
     );
   #endif
 
-  //apply_motion_limits(raw);
-  inverse_kinematics(raw, true);
+  xyze_pos_t real_raw = raw;
+  if (bed_correction) {
+    const xyz_pos_t real = bed_correction_ideal_to_real({ raw.x, raw.y, raw.z });
+    real_raw.x = real.x; real_raw.y = real.y; real_raw.z = real.z;
+  }
+
+  //apply_motion_limits(real_raw);
+  inverse_kinematics(real_raw, true);
   if (kinematic_calc_failiure){
     kinematic_calc_failiure = false;
     return;
@@ -393,12 +423,12 @@ void plan_arc(
   hints.movement_possibility_already_checked = true;
 
   #if HAS_LEVELING && !PLANNER_LEVELING
-    planner.apply_leveling(raw);
+    planner.apply_leveling(real_raw);
   #endif
 
   hints.curve_radius = 0;
   hints.safe_exit_speed_sqr = 0.0f;
-  planner.buffer_line(raw, scaled_fr_mm_s, active_extruder, hints);
+  planner.buffer_line(real_raw, scaled_fr_mm_s, active_extruder, hints);
 
   #if ENABLED(AUTO_BED_LEVELING_UBL)
     ARC_LIJKUVW_CODE(
@@ -407,7 +437,7 @@ void plan_arc(
       raw.u = start_U, raw.v = start_V, raw.w = start_W
     );
   #endif
-  current_position = raw;
+  current_position = real_raw;
 
 } // plan_arc
 
@@ -449,14 +479,48 @@ void GcodeSuite::G2_G3(const bool clockwise) {
     #endif
 
     get_destination_from_command();   // Get X Y [Z[I[J[K...]]]] [E] F (and set cutter power)
-
     TERN_(SF_ARC_FIX, relative_mode = relative_mode_backup);
+
+    xyze_pos_t arc_destination = destination;
+    if (bed_correction_is_active()) {
+      const xyz_pos_t ideal_current = bed_correction_real_to_ideal({
+        current_position.x, current_position.y, current_position.z
+      });
+      xyz_pos_t ideal_destination = ideal_current;
+      if (parser.seenval('X'))
+        ideal_destination.x = axis_is_relative(X_AXIS) ? ideal_current.x + parser.value_axis_units(X_AXIS) : parser.value_axis_units(X_AXIS);
+      if (parser.seenval('Y'))
+        ideal_destination.y = axis_is_relative(Y_AXIS) ? ideal_current.y + parser.value_axis_units(Y_AXIS) : parser.value_axis_units(Y_AXIS);
+      if (parser.seenval('Z'))
+        ideal_destination.z = axis_is_relative(Z_AXIS) ? ideal_current.z + parser.value_axis_units(Z_AXIS) : parser.value_axis_units(Z_AXIS);
+      const xyz_pos_t real_destination = bed_correction_ideal_to_real(ideal_destination);
+      destination.x = real_destination.x;
+      destination.y = real_destination.y;
+      destination.z = real_destination.z;
+      arc_destination.x = ideal_destination.x;
+      arc_destination.y = ideal_destination.y;
+      arc_destination.z = ideal_destination.z;
+    }
 
     ab_float_t arc_offset = { 0, 0 };
     if (parser.seenval('R')) {
       const float r = parser.value_linear_units();
       if (r) {
-        const xy_pos_t p1 = current_position, p2 = destination;
+        xy_pos_t p1 = { arc_destination.x, arc_destination.y },
+                  p2 = { arc_destination.x, arc_destination.y };
+        if (bed_correction_is_active()) {
+          const xyz_pos_t ideal_current = bed_correction_real_to_ideal({
+            current_position.x, current_position.y, current_position.z
+          });
+          p1.x = ideal_current.x;
+          p1.y = ideal_current.y;
+        }
+        else {
+          p1.x = current_position.x;
+          p1.y = current_position.y;
+        }
+        p2.x = arc_destination.x;
+        p2.y = arc_destination.y;
         if (p1 != p2) {
           const xy_pos_t d2 = (p2 - p1) * 0.5f;          // XY vector to midpoint of move from current
           const float e = clockwise ^ (r < 0) ? -1 : 1,  // clockwise -1/1, counterclockwise 1/-1
@@ -496,7 +560,7 @@ void GcodeSuite::G2_G3(const bool clockwise) {
       #endif
 
       // Send the arc to the planner
-      plan_arc(destination, arc_offset, clockwise, circles_to_do);
+      plan_arc(arc_destination, arc_offset, clockwise, circles_to_do);
       reset_stepper_timeout();
     }
     else
