@@ -21,6 +21,9 @@
  *         After three corners are saved, the bed correction is calculated and applied to
  *         incoming G0-G3 XYZ and to outgoing XYZ reports (M114).
  * M365 R: Reset the saved corners and disable the bed correction.
+ * 
+ * M365 T: Toggle correction on / off. Doesnt reset the measurements and matrix
+ * 
  */
 void GcodeSuite::M365() {
   planner.synchronize();
