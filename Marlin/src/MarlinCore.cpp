@@ -47,6 +47,10 @@
 #include "module/stepper.h"
 #include "module/temperature.h"
 
+#if ENABLED(USE_CANBUS)
+  #include "module/canbus.h"
+#endif
+
 #include "gcode/gcode.h"
 #include "gcode/parser.h"
 #include "gcode/queue.h"
@@ -1231,6 +1235,10 @@ void setup() {
   TERN_(DYNAMIC_VECTORTABLE, hook_cpu_exceptions()); // If supported, install Marlin exception handlers at runtime
 
   SETUP_RUN(hal.init());
+
+  #if ENABLED(USE_CANBUS)
+    SETUP_RUN(canbus.setup_canbus());
+  #endif
 
   // Init and disable SPI thermocouples; this is still needed
   #if TEMP_SENSOR_IS_MAX_TC(0) || (TEMP_SENSOR_IS_MAX_TC(REDUNDANT) && REDUNDANT_TEMP_MATCH(SOURCE, E0))

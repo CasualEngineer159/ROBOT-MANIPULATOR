@@ -266,7 +266,7 @@ void GcodeSuite::G28() {
       set_axis_home(B_AXIS);
     }
     // Pojistka proti zacyklení
-    loop_counter =+ 1;
+    loop_counter += 1;
     if (loop_counter>10) {
       SERIAL_ECHOLNPGM("Infinite loop");
       break;
@@ -302,7 +302,6 @@ void GcodeSuite::G28() {
   set_axis_is_at_home(C_AXIS);
   sync_plan_position();
   inverse_kinematics(current_position);
-  report_current_position();
 
   /**
    * Preserve DXC mode across a G28 for IDEX printers in DXC_DUPLICATION_MODE.

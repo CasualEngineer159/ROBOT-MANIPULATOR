@@ -990,6 +990,8 @@ class Planner {
       }
     #endif
 
+    static void reset_small_move_alert();
+
   private:
 
     #if ENABLED(AUTOTEMP)

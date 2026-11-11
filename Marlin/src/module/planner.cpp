@@ -74,6 +74,8 @@
 
 #include "../MarlinCore.h"
 
+static bool small_move_alerted = false;
+
 #if HAS_LEVELING
   #include "../feature/bedlevel/bedlevel.h"
 #endif
@@ -945,8 +947,8 @@ void Planner::calculate_trapezoid_for_block(block_t * const block, const_float_t
  *  bracketed by junction velocities at their maximums (or by the first planner block as well), no new block
  *  added to the planner buffer will alter the velocity profiles within them. So we no longer have to compute
  *  them. Or, if a set of sequential blocks from the first block in the planner (or a optimal stop-compute
- *  point) are all accelerating, they are all optimal and can not be altered by a new block added to the
- *  planner buffer, as this will only further increase the plan speed to chronological blocks until a maximum
+ *  point) are all accelerating, they are all optimal and can not be altered by a new block added to the planner
+ *  buffer, as this will only further increase the plan speed to chronological blocks until a maximum
  *  junction velocity is reached. However, if the operational conditions of the plan changes from infrequently
  *  used feed holds or feedrate overrides, the stop-compute pointers will be reset and the entire plan is
  *  recomputed as stated in the general guidelines.
@@ -2241,7 +2243,13 @@ bool Planner::_populate_block(
   ));
 
   // Bail if this is a zero-length block
-  if (block->step_event_count < MIN_STEPS_PER_SEGMENT) return false;
+  if (block->step_event_count < MIN_STEPS_PER_SEGMENT) {
+    if (!small_move_alerted) {
+      SERIAL_ECHOLNPGM("Warning: Small movement rejected by planner. Further messages will be suppressed.");
+      small_move_alerted = true;
+    }
+    return false;
+  }
 
   TERN_(MIXING_EXTRUDER, mixer.populate_block(block->b_color));
 
@@ -2827,9 +2835,9 @@ bool Planner::_populate_block(
     const float extra_xyjerk = TERN0(HAS_EXTRUDERS, de <= 0) ? TRAVEL_EXTRA_XYJERK : 0;
 
     uint8_t limited = 0;
-    TERN(HAS_LINEAR_E_JERK, LOOP_NUM_AXES, LOOP_LOGICAL_AXES)(i) {
-      const float jerk = ABS(current_speed[i]),   // cs : Starting from zero, change in speed for this axis
-                  maxj = (max_jerk[i] + (i == X_AXIS || i == Y_AXIS ? extra_xyjerk : 0.0f)); // mj : The max jerk setting for this axis
+    TERN(HAS_LINEAR_E_JERK, LOOP_NUM_AXES, LOOP_LOGICAL_AXES)(axis) {
+      const float jerk = ABS(current_speed[axis]),   // cs : Starting from zero, change in speed for this axis
+                  maxj = (max_jerk[axis] + (axis == X_AXIS || axis == Y_AXIS ? extra_xyjerk : 0.0f)); // mj : The max jerk setting for this axis
       if (jerk > maxj) {                          // cs > mj : New current speed too fast?
         if (limited) {                            // limited already?
           const float mjerk = block->nominal_speed * maxj; // ns*mj
@@ -3101,7 +3109,6 @@ bool Planner::buffer_segment(const abce_pos_t &abce
       SERIAL_CHAR(')');
     #endif
     #if HAS_EXTRUDERS
-      SERIAL_ECHOPGM_P(SP_E_LBL, abce.e);
       SERIAL_ECHOLNPGM(" (", position.e, "->", target.e, ")");
     #else
       SERIAL_EOL();
@@ -3469,3 +3476,7 @@ void Planner::set_max_feedrate(const AxisEnum axis, float inMaxFeedrateMMS) {
   }
 
 #endif
+
+void Planner::reset_small_move_alert() {
+  small_move_alerted = false;
+}

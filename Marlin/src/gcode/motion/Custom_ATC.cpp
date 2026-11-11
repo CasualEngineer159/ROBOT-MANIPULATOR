@@ -78,6 +78,22 @@ void exec_move(const char* cmd_prefix, float a, float r, float z, int f = 0) {
     gcode.process_subcommands_now(cmd);
 }
 
+void exec_blocking_move(float a, float r, float z, int f = 0) {
+    xyz_pos_t target;
+    
+    // Convert polar coordinates (Angle A in degrees, Radius R) to Cartesian (X, Y)
+    float rad = a * (M_PI / 180.0);
+    target.x = r * cos(rad);
+    target.y = r * sin(rad);
+    target.z = z;
+    
+    // G-code feedrate 'f' is in mm/min, but do_blocking_move_to expects mm/s.
+    constexpr int default_feedrate_mm_min = 3000;
+    float fr_mm_s = ((f > 0) ? f : default_feedrate_mm_min) / 60.0f;
+    
+    do_blocking_move_to(target, fr_mm_s);
+}
+
 // --- OPTIMALIZACE: UNIVERZÁLNÍ FUNKCE PRO ODLOŽENÍ ---
 bool unload_current_tool() {
 
@@ -119,12 +135,14 @@ bool unload_current_tool() {
 
     SERIAL_ECHOPGM(">> Odkladam T"); SERIAL_ECHO(tool_in_hand); SERIAL_ECHOPGM(" do D"); SERIAL_ECHOLN(free_dock);
     
-    float current_A = atan2(current_position.y, current_position.x) * (180.0 / M_PI);
-    float current_R = hypot(current_position.x, current_position.y); // Odpovídá sqrt(X^2 + Y^2)
-    
-    exec_move("G8", current_A, current_R, ref_Z + 100);
-    exec_move("G8", current_A, ref_R + 100, ref_Z + 100);
-    exec_move("G8", t_A, ref_R + 100, ref_Z + 100);       
+    // no longer needed after using blocking move instead
+    // float current_A = atan2(current_position.y, current_position.x) * (180.0 / M_PI);
+    // float current_R = hypot(current_position.x, current_position.y); // Odpovídá sqrt(X^2 + Y^2)
+
+    // execute a blocking move to safe radial distance and height above tool dock
+    exec_blocking_move(t_A, ref_R + 100, ref_Z + 100); 
+
+    // begin unloading equence 
     exec_move("G8", t_A, ref_R + 60,  ref_Z + 6, 2000);   
     exec_move("G9", t_A, ref_R,       ref_Z, 1000);       
     
@@ -281,9 +299,8 @@ void GcodeSuite::M667() {
             tool_in_hand = -1;
         }
 
-        float current_A = DEGREES(atan2(current_position.y, current_position.x));
+        // float current_A = DEGREES(atan2(current_position.y, current_position.x));
         float current_R = hypot(current_position.x, current_position.y);
-        exec_move("G8", current_A, current_R, ref_Z + 100);
 
         // 3. Výpočet tras a seřazení (Optimalizace)
         float cur_A = DEGREES(atan2(current_position.y, current_position.x));
@@ -305,6 +322,9 @@ void GcodeSuite::M667() {
                 }
             }
         }
+
+        const float first_scan_A = ref_A + magazine[scan_order[0]].a_offset;
+        exec_blocking_move(first_scan_A, current_R, ref_Z + 100);
 
         // 4. Samotný fyzický sken v optimalizovaném pořadí
         for (int step = 0; step < 3; step++) {
@@ -460,7 +480,7 @@ void GcodeSuite::M6() {
 
     SERIAL_ECHOPGM(">> Vyzvedavam z D"); SERIAL_ECHOLN(source_dock);
 
-    exec_move("G8", t_A, ref_R,       ref_Z + 60);       
+    exec_blocking_move(t_A, ref_R,       ref_Z + 60);       
     gcode.process_subcommands_now((char *)"M280 P0 S180"); 
     
     exec_move("G9", t_A, ref_R,       ref_Z, 1000);       

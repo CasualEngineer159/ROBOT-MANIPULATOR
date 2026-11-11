@@ -684,33 +684,6 @@ void GcodeSuite::process_parsed_command(const bool no_ok/*=false*/) {
         case 123: M123(); break;                                  // M123: Report fan states or set fans auto-report interval
       #endif
 
-      #if HAS_HEATED_BED
-        case 140: M140(); break;                                  // M140: Set bed temperature
-        case 190: M190(); break;                                  // M190: Wait for bed temperature to reach target
-      #endif
-
-      #if HAS_HEATED_CHAMBER
-        case 141: M141(); break;                                  // M141: Set chamber temperature
-        case 191: M191(); break;                                  // M191: Wait for chamber temperature to reach target
-      #endif
-
-      #if HAS_TEMP_PROBE
-        case 192: M192(); break;                                  // M192: Wait for probe temp
-      #endif
-
-      #if HAS_COOLER
-        case 143: M143(); break;                                  // M143: Set cooler temperature
-        case 193: M193(); break;                                  // M193: Wait for cooler temperature to reach target
-      #endif
-
-      #if ENABLED(AUTO_REPORT_POSITION)
-        case 154: M154(); break;                                  // M154: Set position auto-report interval
-      #endif
-
-      #if BOTH(AUTO_REPORT_TEMPERATURES, HAS_TEMP_SENSOR)
-        case 155: M155(); break;                                  // M155: Set temperature auto-report interval
-      #endif
-
       #if ENABLED(PARK_HEAD_ON_PAUSE)
         case 125: M125(); break;                                  // M125: Store current position and move to filament change position
       #endif
@@ -751,6 +724,25 @@ void GcodeSuite::process_parsed_command(const bool no_ok/*=false*/) {
       case 120: M120(); break;                                    // M120: Enable endstops
       case 121: M121(); break;                                    // M121: Disable endstops
 
+      #if HAS_HEATED_BED
+        case 140: M140(); break;                                  // M140: Set bed temperature
+        case 190: M190(); break;                                  // M190: Wait for bed temperature to reach target
+      #endif
+
+      #if HAS_HEATED_CHAMBER
+        case 141: M141(); break;                                  // M141: Set chamber temperature
+        case 191: M191(); break;                                  // M191: Wait for chamber temperature to reach target
+      #endif
+
+      #if HAS_TEMP_PROBE
+        case 192: M192(); break;                                  // M192: Wait for probe temp
+      #endif
+
+      #if HAS_COOLER
+        case 143: M143(); break;                                  // M143: Set cooler temperature
+        case 193: M193(); break;                                  // M193: Wait for cooler temperature to reach target
+      #endif
+
       #if HAS_PREHEAT
         case 145: M145(); break;                                  // M145: Set material heatup parameters
       #endif
@@ -761,6 +753,14 @@ void GcodeSuite::process_parsed_command(const bool no_ok/*=false*/) {
 
       #if HAS_COLOR_LEDS
         case 150: M150(); break;                                  // M150: Set Status LED Color
+      #endif
+
+      #if ENABLED(AUTO_REPORT_POSITION)
+        case 154: M154(); break;                                  // M154: Set position auto-report interval
+      #endif
+
+      #if BOTH(AUTO_REPORT_TEMPERATURES, HAS_TEMP_SENSOR)
+        case 155: M155(); break;                                  // M155: Set temperature auto-report interval
       #endif
 
       #if ENABLED(MIXING_EXTRUDER)
@@ -824,6 +824,27 @@ void GcodeSuite::process_parsed_command(const bool no_ok/*=false*/) {
         case 226: M226(); break;                                  // M226: Wait until a pin reaches a state
       #endif
 
+      #if ENABLED(PHOTO_GCODE)
+        case 240: M240(); break;                                  // M240: Trigger a camera
+      #endif
+
+      #if HAS_LCD_CONTRAST
+        case 250: M250(); break;                                  // M250: Set LCD contrast
+      #endif
+
+      #if HAS_GCODE_M255
+        case 255: M255(); break;                                  // M255: Set LCD Sleep/Backlight Timeout (Minutes)
+      #endif
+
+      #if HAS_LCD_BRIGHTNESS
+        case 256: M256(); break;                                  // M256: Set LCD brightness
+      #endif
+
+      #if ENABLED(EXPERIMENTAL_I2CBUS)
+        case 260: M260(); break;                                  // M260: Send data to an i2c slave
+        case 261: M261(); break;                                  // M261: Request data from an i2c slave
+      #endif
+
       #if HAS_SERVOS
         case 280: M280(); break;                                  // M280: Set servo position absolute
         // #if ENABLED(EDITABLE_SERVO_ANGLES)
@@ -846,35 +867,6 @@ void GcodeSuite::process_parsed_command(const bool no_ok/*=false*/) {
         case 301: M301(); break;                                  // M301: Set hotend PID parameters
       #endif
 
-      #if ENABLED(PIDTEMPBED)
-        case 304: M304(); break;                                  // M304: Set bed PID parameters
-      #endif
-
-      #if ENABLED(PIDTEMPCHAMBER)
-        case 309: M309(); break;                                  // M309: Set chamber PID parameters
-      #endif
-
-      #if ENABLED(PHOTO_GCODE)
-        case 240: M240(); break;                                  // M240: Trigger a camera
-      #endif
-
-      #if HAS_LCD_CONTRAST
-        case 250: M250(); break;                                  // M250: Set LCD contrast
-      #endif
-
-      #if HAS_GCODE_M255
-        case 255: M255(); break;                                  // M255: Set LCD Sleep/Backlight Timeout (Minutes)
-      #endif
-
-      #if HAS_LCD_BRIGHTNESS
-        case 256: M256(); break;                                  // M256: Set LCD brightness
-      #endif
-
-      #if ENABLED(EXPERIMENTAL_I2CBUS)
-        case 260: M260(); break;                                  // M260: Send data to an i2c slave
-        case 261: M261(); break;                                  // M261: Request data from an i2c slave
-      #endif
-
       #if ENABLED(PREVENT_COLD_EXTRUSION)
         case 302: M302(); break;                                  // M302: Allow cold extrudes (set the minimum extrude temperature)
       #endif
@@ -883,12 +875,20 @@ void GcodeSuite::process_parsed_command(const bool no_ok/*=false*/) {
         case 303: M303(); break;                                  // M303: PID autotune
       #endif
 
+      #if ENABLED(PIDTEMPBED)
+        case 304: M304(); break;                                  // M304: Set bed PID parameters
+      #endif
+
       #if HAS_USER_THERMISTORS
         case 305: M305(); break;                                  // M305: Set user thermistor parameters
       #endif
 
       #if ENABLED(MPCTEMP)
         case 306: M306(); break;                                  // M306: MPC autotune
+      #endif
+
+      #if ENABLED(PIDTEMPCHAMBER)
+        case 309: M309(); break;                                  // M309: Set chamber PID parameters
       #endif
 
       #if ENABLED(REPETIER_GCODE_M360)
@@ -1004,6 +1004,7 @@ void GcodeSuite::process_parsed_command(const bool no_ok/*=false*/) {
 
       #if HAS_SHAPING
         case 593: M593(); break;                                  // M593: Set Input Shaping parameters
+        case 594: M594(); break;                                  // M594: Frequency Sweep
       #endif
 
       #if ENABLED(ADVANCED_PAUSE_FEATURE)
@@ -1028,6 +1029,11 @@ void GcodeSuite::process_parsed_command(const bool no_ok/*=false*/) {
 
       #if ENABLED(DUET_SMART_EFFECTOR) && PIN_EXISTS(SMART_EFFECTOR_MOD)
         case 672: M672(); break;                                  // M672: Set/clear Duet Smart Effector sensitivity
+      #endif
+
+      #if ENABLED(USE_CANBUS)
+        case 700: M700(); break;
+        case 701: M701(); break;
       #endif
 
       #if ENABLED(FILAMENT_LOAD_UNLOAD_GCODES)
