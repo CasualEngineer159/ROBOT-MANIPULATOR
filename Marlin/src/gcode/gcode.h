@@ -261,7 +261,7 @@
  * M569 - Enable stealthChop on an axis. (Requires at least one _DRIVER_TYPE to be TMC2130/2160/2208/2209/5130/5160)
  * M575 - Change the serial baud rate. (Requires BAUD_RATE_GCODE)
  * M593 - Get or set input shaping parameters. (Requires INPUT_SHAPING_[XY])
- * M594 - Frequency Sweep to determine resonant frequencies
+ * M594 - Frequency Sweep of joint A/B/C (S0/S1/S2) to determine resonant frequencies
  * M600 - Pause for filament change: "M600 X<pos> Y<pos> Z<raise> E<first_retract> L<later_retract>". (Requires ADVANCED_PAUSE_FEATURE)
  * M603 - Configure filament change: "M603 T<tool> U<unload_length> L<load_length>". (Requires ADVANCED_PAUSE_FEATURE)
  * M605 - Set Dual X-Carriage movement mode: "M605 S<mode> [X<x_offset>] [R<temp_offset>]". (Requires DUAL_X_CARRIAGE)
