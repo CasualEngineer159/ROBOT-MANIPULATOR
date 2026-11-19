@@ -12,7 +12,7 @@ constexpr float SWEEP_START_FREQ      = 1.0f;
 constexpr float SWEEP_END_FREQ        = 20.0f;
 constexpr float SWEEP_HZ_PER_SEC      = 0.5f;
 constexpr float RESONANCE_DURATION_S  = 2.5f;
-constexpr float SWEEP_AMPLITUDE_DEG   = 0.05f; // Joint amplitude (deg) applied to A, B or C alike
+constexpr float ACCEL_PER_HZ = 36.0f; // deg/s^2 na 1 Hz (dává 2*A = 20 kroků při 20 Hz na B/C)
 
 constexpr float TEST_MAX_ACCEL        = 20000.0f;
 constexpr float TEST_MAX_FEEDRATE     = 500.0f;
@@ -146,7 +146,8 @@ void M594_sweep(int axis) {
     }
 
     const float t_seg = 0.25f / current_freq;
-    const float accel = SWEEP_AMPLITUDE_DEG / sq(t_seg);
+    const float accel = ACCEL_PER_HZ * current_freq;
+    const float amp   = accel * sq(t_seg);
 
     planner.set_max_acceleration(joint_axis(axis), accel);
     planner.settings.acceleration = accel;
@@ -154,7 +155,7 @@ void M594_sweep(int axis) {
 
     const float velocity = accel * t_seg;
 
-    M594_move_joint(axis, center + sign * SWEEP_AMPLITUDE_DEG, velocity);
+    M594_move_joint(axis, center + sign * amp, velocity);
 
     current_freq += 2.0f * t_seg * SWEEP_HZ_PER_SEC;
     sign = -sign;
@@ -177,7 +178,8 @@ void M594_resonate(int axis, float freq) {
   const float center = joint_ref(axis);
 
   const float t_seg = 0.25f / freq;
-  const float accel = SWEEP_AMPLITUDE_DEG / sq(t_seg);
+  const float accel = ACCEL_PER_HZ * freq;
+  const float amp   = accel * sq(t_seg);
 
   planner.set_max_acceleration(joint_axis(axis), accel);
   planner.settings.acceleration = accel;
@@ -190,7 +192,7 @@ void M594_resonate(int axis, float freq) {
       idle();
     }
 
-    M594_move_joint(axis, center + sign * SWEEP_AMPLITUDE_DEG, velocity);
+    M594_move_joint(axis, center + sign * amp, velocity);
 
     total_time += 2.0f * t_seg;
     sign = -sign;
