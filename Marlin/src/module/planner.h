@@ -1062,4 +1062,6 @@ class Planner {
 
 #define PLANNER_XY_FEEDRATE() _MIN(planner.settings.max_feedrate_mm_s[X_AXIS], planner.settings.max_feedrate_mm_s[Y_AXIS])
 
+#define MINIMAL_STEP_RATE 40
+
 extern Planner planner;

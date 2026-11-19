@@ -8,20 +8,23 @@
 #include "../../../module/motion.h"
 #include "../../../MarlinCore.h"
 
-constexpr float SWEEP_START_FREQ      = 1.0f;
-constexpr float SWEEP_END_FREQ        = 20.0f;
+constexpr float SWEEP_START_FREQ      = 2.0f;
+constexpr float SWEEP_END_FREQ        = 15.0f;
 constexpr float SWEEP_HZ_PER_SEC      = 0.5f;
 constexpr float RESONANCE_DURATION_S  = 2.5f;
-constexpr float ACCEL_PER_HZ = 36.0f; // deg/s^2 na 1 Hz (dává 2*A = 20 kroků při 20 Hz na B/C)
+constexpr float ACCEL_PER_HZ          = 72.0f; // deg/s^2 na 1 Hz (dává 2*A = 20 kroků při 20 Hz na B/C)
 
 constexpr float TEST_MAX_ACCEL        = 20000.0f;
 constexpr float TEST_MAX_FEEDRATE     = 500.0f;
 constexpr float TEST_JUNCTION_DEV     = 0.05f;
+constexpr float TEST_MAX_JERK         = 0.0f;
 
 static float old_max_acceleration_x, old_max_acceleration_y, old_max_acceleration_z;
 static float old_max_feedrate_x, old_max_feedrate_y, old_max_feedrate_z;
 static float old_print_acceleration;
 static float old_travel_acceleration;
+static uint32_t old_min_segment_time;
+
 #if ENABLED(CLASSIC_JERK)
   static float old_jerk_x, old_jerk_y, old_jerk_z;
 #else
@@ -49,6 +52,10 @@ void M594_setup(const bool shaping_on) {
   old_max_feedrate_y = planner.settings.max_feedrate_mm_s[Y_AXIS];
   old_max_feedrate_z = planner.settings.max_feedrate_mm_s[Z_AXIS];
 
+  // Zabránění slowdown na posledních 7 segmentech
+  old_min_segment_time = planner.settings.min_segment_time_us;
+  planner.settings.min_segment_time_us = 0;
+
   #if ENABLED(CLASSIC_JERK)
     old_jerk_x = planner.max_jerk.x;
     old_jerk_y = planner.max_jerk.y;
@@ -63,18 +70,22 @@ void M594_setup(const bool shaping_on) {
   #if ENABLED(INPUT_SHAPING_Y)
     old_shaping_freq_y = stepper.get_shaping_frequency(Y_AXIS);
   #endif
+  #if ENABLED(INPUT_SHAPING_Z)
+    old_shaping_freq_z = stepper.get_shaping_frequency(Z_AXIS);
+  #endif
 
   planner.set_max_acceleration(X_AXIS, TEST_MAX_ACCEL);
   planner.set_max_acceleration(Y_AXIS, TEST_MAX_ACCEL);
   planner.set_max_acceleration(Z_AXIS, TEST_MAX_ACCEL);
+
   planner.set_max_feedrate(X_AXIS, TEST_MAX_FEEDRATE);
   planner.set_max_feedrate(Y_AXIS, TEST_MAX_FEEDRATE);
   planner.set_max_feedrate(Z_AXIS, TEST_MAX_FEEDRATE);
 
   #if ENABLED(CLASSIC_JERK)
-    planner.set_max_jerk(X_AXIS, 1.0f);
-    planner.set_max_jerk(Y_AXIS, 1.0f);
-    planner.set_max_jerk(Z_AXIS, 1.0f);
+    planner.set_max_jerk(X_AXIS, TEST_MAX_JERK);
+    planner.set_max_jerk(Y_AXIS, TEST_MAX_JERK);
+    planner.set_max_jerk(Z_AXIS, TEST_MAX_JERK);
   #else
     planner.junction_deviation_mm = TEST_JUNCTION_DEV;
   #endif
@@ -88,6 +99,9 @@ void M594_setup(const bool shaping_on) {
     #endif
     #if ENABLED(INPUT_SHAPING_Y)
       stepper.set_shaping_frequency(Y_AXIS, 0.0f);
+    #endif
+    #if ENABLED(INPUT_SHAPING_Z)
+      stepper.set_shaping_frequency(Z_AXIS, 0.0f);
     #endif
   }
 
@@ -138,22 +152,34 @@ void M594_sweep(int axis) {
   float sign = 1.0f;
 
   inverse_kinematics(current_position);
-  const float center = joint_ref(axis);
+  const AxisEnum j_axis = joint_axis(axis);
+  const float steps_per_deg = planner.settings.axis_steps_per_mm[j_axis];
+  const float v0 = float(MINIMAL_STEP_RATE) / steps_per_deg;
+
+  // Zarovnání středu na celý krok kvůli symetrii zaokrouhlování
+  const float center = roundf(joint_ref(axis) * steps_per_deg) / steps_per_deg;
+
+  // Pomalý nájezd do první úvratě (-amp0), aby 1. kmit neměl poloviční dráhu
+  const float t_seg0 = 0.25f / current_freq;
+  const float accel0 = ACCEL_PER_HZ * current_freq;
+  const float amp0   = v0 * t_seg0 + 0.5f * accel0 * sq(t_seg0);
+  planner.settings.travel_acceleration = 200.0f;
+  M594_move_joint(axis, center - amp0, 10.0f);
+  planner.synchronize();
 
   while (current_freq <= SWEEP_END_FREQ) {
     while (planner.movesplanned() >= BLOCK_BUFFER_SIZE - 4) {
       idle();
     }
 
-    const float t_seg = 0.25f / current_freq;
-    const float accel = ACCEL_PER_HZ * current_freq;
-    const float amp   = accel * sq(t_seg);
+    const float t_seg    = 0.25f / current_freq;
+    const float accel    = ACCEL_PER_HZ * current_freq;
+    const float amp      = v0 * t_seg + 0.5f * accel * sq(t_seg);
+    const float velocity = v0 + accel * t_seg;
 
-    planner.set_max_acceleration(joint_axis(axis), accel);
+    planner.set_max_acceleration(j_axis, accel);
     planner.settings.acceleration = accel;
     planner.settings.travel_acceleration = accel;
-
-    const float velocity = accel * t_seg;
 
     M594_move_joint(axis, center + sign * amp, velocity);
 
@@ -161,6 +187,9 @@ void M594_sweep(int axis) {
     sign = -sign;
   }
 
+  // Návrat do středu
+  planner.settings.travel_acceleration = 200.0f;
+  M594_move_joint(axis, center, 10.0f);
   planner.synchronize();
 }
 
@@ -175,17 +204,24 @@ void M594_resonate(int axis, float freq) {
   float sign = 1.0f;
 
   inverse_kinematics(current_position);
-  const float center = joint_ref(axis);
+  const AxisEnum j_axis = joint_axis(axis);
+  const float steps_per_deg = planner.settings.axis_steps_per_mm[j_axis];
+  const float v0 = float(MINIMAL_STEP_RATE) / steps_per_deg;
+  const float center = roundf(joint_ref(axis) * steps_per_deg) / steps_per_deg;
 
-  const float t_seg = 0.25f / freq;
-  const float accel = ACCEL_PER_HZ * freq;
-  const float amp   = accel * sq(t_seg);
+  const float t_seg    = 0.25f / freq;
+  const float accel    = ACCEL_PER_HZ * freq;
+  const float amp      = v0 * t_seg + 0.5f * accel * sq(t_seg);
+  const float velocity = v0 + accel * t_seg;
 
-  planner.set_max_acceleration(joint_axis(axis), accel);
+  // Pomalý nájezd do výchozí úvratě
+  planner.settings.travel_acceleration = 200.0f;
+  M594_move_joint(axis, center - amp, 10.0f);
+  planner.synchronize();
+
+  planner.set_max_acceleration(j_axis, accel);
   planner.settings.acceleration = accel;
   planner.settings.travel_acceleration = accel;
-
-  const float velocity = accel * t_seg;
 
   while (total_time <= RESONANCE_DURATION_S) {
     while (planner.movesplanned() >= BLOCK_BUFFER_SIZE - 4) {
@@ -198,6 +234,8 @@ void M594_resonate(int axis, float freq) {
     sign = -sign;
   }
 
+  planner.settings.travel_acceleration = 200.0f;
+  M594_move_joint(axis, center, 10.0f);
   planner.synchronize();
 }
 
@@ -212,6 +250,7 @@ void M594_teardown() {
   planner.set_max_feedrate(X_AXIS, old_max_feedrate_x);
   planner.set_max_feedrate(Y_AXIS, old_max_feedrate_y);
   planner.set_max_feedrate(Z_AXIS, old_max_feedrate_z);
+  planner.settings.min_segment_time_us = old_min_segment_time;
 
   #if ENABLED(CLASSIC_JERK)
     planner.set_max_jerk(X_AXIS, old_jerk_x);
@@ -226,6 +265,9 @@ void M594_teardown() {
   #endif
   #if ENABLED(INPUT_SHAPING_Y)
     stepper.set_shaping_frequency(Y_AXIS, old_shaping_freq_y);
+  #endif
+  #if ENABLED(INPUT_SHAPING_Z)
+    stepper.set_shaping_frequency(Z_AXIS, old_shaping_freq_z);
   #endif
 
   #if ENABLED(S_CURVE_ACCELERATION)
