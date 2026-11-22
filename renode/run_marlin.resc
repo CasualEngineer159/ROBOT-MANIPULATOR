@@ -1,0 +1,51 @@
+Clear
+mach create "octopus_pro"
+machine LoadPlatformDescription $ORIGIN/octopus_pro.repl
+
+# Načtení zkompilovaného firmwaru
+sysbus LoadELF $ORIGIN/../.pio/build/BIGTREE_OCTOPUS_V1_renode/firmware.elf
+
+# Otevření sériového terminálu USART1 (zde budeš zadávat M594 S0 F10)
+showAnalyzer sysbus.usart1
+
+# Záznam všech pulzů na pinech STEP (A=PF13, B=PG0, C=PF11) do pulses.csv
+python """
+import os
+
+path = os.path.join(str(variables.ORIGIN), 'pulses.csv')
+pulses = []
+
+stepA = self.Machine['sysbus.gpioPortF.stepA']
+dirA  = self.Machine['sysbus.gpioPortF.dirA']
+stepB = self.Machine['sysbus.gpioPortG.stepB']
+dirB  = self.Machine['sysbus.gpioPortG.dirB']
+stepC = self.Machine['sysbus.gpioPortF.stepC']
+dirC  = self.Machine['sysbus.gpioPortG.dirC']
+
+def make_handler(axis, dir_led):
+    def handler(led, state):
+        if state:
+            t_us = self.Machine.ElapsedVirtualTime.TimeElapsed.TotalSeconds * 1e6
+            d = 1 if dir_led.State else 0
+            pulses.append('%.3f,%s,%d\n' % (t_us, axis, d))
+    return handler
+
+stepA.StateChanged += make_handler('A', dirA)
+stepB.StateChanged += make_handler('B', dirB)
+stepC.StateChanged += make_handler('C', dirC)
+
+def mc_save_pulses():
+    with open(path, 'w') as f:
+        f.write('time_us,axis,dir\n')
+        f.writelines(pulses)
+    print('Ulozeno %d pulzu do pulses.csv' % len(pulses))
+
+def mc_clear_pulses():
+    global pulses
+    pulses = []
+    with open(path, 'w') as f:
+        f.write('time_us,axis,dir\n')
+    print('Pamet vycistena, %d zbyvajicich pulzu v pameti' % len(pulses))
+"""
+
+start

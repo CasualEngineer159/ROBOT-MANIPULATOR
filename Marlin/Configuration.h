@@ -101,7 +101,15 @@
  *
  * :[-1, 0, 1, 2, 3, 4, 5, 6, 7]
  */
-#define SERIAL_PORT -1
+
+
+// Definice serioveho portu pro renode
+#ifdef RENODE_SIM
+  #define SERIAL_PORT 1
+#else
+  #define SERIAL_PORT -1
+#endif
+
 
 /**
  * Serial Port Baud Rate
@@ -539,7 +547,19 @@
  *   999 : Dummy Table that ALWAYS reads 100°C or the temperature defined below.
  *
  */
-#define TEMP_SENSOR_0 1
+
+
+// Při spuštění pomocí renode simulujeme normální teplotu 25°
+#ifdef RENODE_SIM
+  #define TEMP_SENSOR_0 998
+  #define TEMP_SENSOR_BED 998
+#else
+  #define TEMP_SENSOR_0 1
+  #define TEMP_SENSOR_BED 1
+#endif
+
+
+// Other Temp sensors
 #define TEMP_SENSOR_1 0
 #define TEMP_SENSOR_2 0
 #define TEMP_SENSOR_3 0
@@ -547,7 +567,6 @@
 #define TEMP_SENSOR_5 0
 #define TEMP_SENSOR_6 0
 #define TEMP_SENSOR_7 0
-#define TEMP_SENSOR_BED 1
 #define TEMP_SENSOR_PROBE 0
 #define TEMP_SENSOR_CHAMBER 0
 #define TEMP_SENSOR_COOLER 0
@@ -3373,3 +3392,10 @@
 
 // Definováno kvůli potlačení varování při kompilaci
 #define DIAG_JUMPERS_REMOVED
+
+
+// Definováno k potlačení EEPROM a CANBUS při simulaci pomocí renode
+#ifdef RENODE_SIM
+  #undef EEPROM_SETTINGS
+  #undef USE_CANBUS
+#endif

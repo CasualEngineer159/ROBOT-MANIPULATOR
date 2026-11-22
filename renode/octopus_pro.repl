@@ -1,0 +1,28 @@
+using "platforms/cpus/stm32f4.repl"
+
+flash:
+    size: 0x80000
+
+sram:
+    size: 0x20000
+
+timer10:
+    frequency: 180000000
+
+stepA: Miscellaneous.LED @ gpioPortF
+dirA:  Miscellaneous.LED @ gpioPortF
+stepC: Miscellaneous.LED @ gpioPortF
+
+stepB: Miscellaneous.LED @ gpioPortG
+dirB:  Miscellaneous.LED @ gpioPortG
+dirC:  Miscellaneous.LED @ gpioPortG
+
+gpioPortF:
+    13 -> stepA@0
+    12 -> dirA@0
+    11 -> stepC@0
+
+gpioPortG:
+    0 -> stepB@0
+    1 -> dirB@0
+    3 -> dirC@0
