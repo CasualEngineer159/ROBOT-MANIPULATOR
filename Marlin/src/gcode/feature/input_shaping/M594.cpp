@@ -9,10 +9,10 @@
 #include "../../../MarlinCore.h"
 
 constexpr float SWEEP_START_FREQ      = 2.0f;
-constexpr float SWEEP_END_FREQ        = 15.0f;
-constexpr float SWEEP_HZ_PER_SEC      = 0.5f;
+constexpr float SWEEP_END_FREQ        = 20.0f;
+constexpr float SWEEP_HZ_PER_SEC      = 0.25f;
 constexpr float RESONANCE_DURATION_S  = 2.5f;
-constexpr float ACCEL_PER_HZ          = 72.0f; // deg/s^2 na 1 Hz (dává 2*A = 20 kroků při 20 Hz na B/C)
+constexpr float ACCEL_PER_HZ          = 36.0f;
 
 constexpr float TEST_MAX_ACCEL        = 20000.0f;
 constexpr float TEST_MAX_FEEDRATE     = 500.0f;
@@ -164,8 +164,9 @@ void M594_sweep(int axis) {
   const float accel0 = ACCEL_PER_HZ * current_freq;
   const float amp0   = v0 * t_seg0 + 0.5f * accel0 * sq(t_seg0);
   planner.settings.travel_acceleration = 200.0f;
-  M594_move_joint(axis, center - amp0, 10.0f);
+  M594_move_joint(axis, center - amp0, 5.0f);
   planner.synchronize();
+  safe_delay(1000);
 
   while (current_freq <= SWEEP_END_FREQ) {
     while (planner.movesplanned() >= BLOCK_BUFFER_SIZE - 4) {
@@ -185,11 +186,15 @@ void M594_sweep(int axis) {
 
     current_freq += 2.0f * t_seg * SWEEP_HZ_PER_SEC;
     sign = -sign;
+    
   }
+
+  planner.synchronize();
+  safe_delay(1000);
 
   // Návrat do středu
   planner.settings.travel_acceleration = 200.0f;
-  M594_move_joint(axis, center, 10.0f);
+  M594_move_joint(axis, center, 5.0f);
   planner.synchronize();
 }
 
@@ -216,8 +221,9 @@ void M594_resonate(int axis, float freq) {
 
   // Pomalý nájezd do výchozí úvratě
   planner.settings.travel_acceleration = 200.0f;
-  M594_move_joint(axis, center - amp, 10.0f);
+  M594_move_joint(axis, center - amp, 5.0f);
   planner.synchronize();
+  safe_delay(1000);
 
   planner.set_max_acceleration(j_axis, accel);
   planner.settings.acceleration = accel;
@@ -234,8 +240,11 @@ void M594_resonate(int axis, float freq) {
     sign = -sign;
   }
 
+  planner.synchronize();
+  safe_delay(1000);
+
   planner.settings.travel_acceleration = 200.0f;
-  M594_move_joint(axis, center, 10.0f);
+  M594_move_joint(axis, center, 5.0f);
   planner.synchronize();
 }
 
