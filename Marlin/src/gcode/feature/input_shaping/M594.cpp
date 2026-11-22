@@ -8,6 +8,17 @@
 #include "../../../module/motion.h"
 #include "../../../MarlinCore.h"
 
+/*
+Další relevantní informace
+
+V Configuration_adv.h je nastaven ADAPTIVE_STEP_SMOOTHING - dynamicky navýší vzorkování přeruření Stepper:isr() --> vede k vyhlazení profilu při nízkých rychlostech
+
+V planner.h je ponechán MINIMAL_STEP_RATE na 120. I když je to hodnota původně nastavená kvůli riziku přetékání časovače, je třeba. Sice kvůli tomu v úratích pohybu vzniká skok, ale její snížení zanmené zvětšení odchylky od chtěné frekvence. Její přímý efekt je do jisté míry kompenzován zavedením rychlostního biasu v0.
+
+Jak je vidět při simulaci pomocí renode, přesné kopírování chtěné frekvence je obtížné. Lepší pak při zpracování kalibrovat s tím co známe.
+*/
+
+
 constexpr float SWEEP_START_FREQ      = 2.0f;
 constexpr float SWEEP_END_FREQ        = 20.0f;
 constexpr float SWEEP_HZ_PER_SEC      = 0.25f;
