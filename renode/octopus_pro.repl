@@ -6,8 +6,14 @@ flash:
 sram:
     size: 0x20000
 
+nvic:
+    systickFrequency: 180000000
+
 timer10:
     frequency: 180000000
+
+timer14:
+    frequency: 90000000
 
 stepA: Miscellaneous.LED @ gpioPortF
 dirA:  Miscellaneous.LED @ gpioPortF

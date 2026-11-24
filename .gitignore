@@ -167,6 +167,11 @@ cmake-build-*
 
 # Python
 __pycache__
+.venv/
 
 # IOLogger logs
 *_log.csv
+
+# Renode measurements
+measurements/
+renode/pulses.csv
